@@ -1,0 +1,17 @@
+# Agente de Spec-Driven Development
+# Requer Python >=3.10 e <3.14 (limite imposto pelo CrewAI) -> use Python 3.13
+
+# Orquestração multiagente + integração nativa com Gemini
+crewai[google-genai]>=1.0.0
+
+# SDK oficial do Google Gen AI (também puxado pelo extra acima; explícito aqui)
+google-genai>=1.0.0
+
+# Validação da saída estruturada (arquivos gerados)
+pydantic>=2.0.0
+
+# Carrega a chave da API a partir do arquivo .env
+python-dotenv>=1.0.0
+
+# Lê especificações com front-matter YAML (configs dos agentes)
+PyYAML>=6.0

@@ -1,0 +1,55 @@
+# Tarefas executadas em sequência. Marcadores [[NOME]] são substituídos em
+# Python (não usamos chaves para não conflitar com CSS/JS dentro das specs).
+
+analisar:
+  agent: analista
+  description: >
+    Leia a especificação abaixo e produza um plano técnico.
+
+    1. Liste cada requisito funcional como RF-01, RF-02, ... e cada requisito
+       não funcional como RNF-01, ... Se a spec já tiver IDs, preserve-os.
+    2. Para cada requisito, escreva um critério de aceitação verificável.
+    3. Descreva a estrutura de arquivos (por padrão index.html, style.css e
+       script.js), o modelo de dados e os componentes de interface.
+    4. Liste ambiguidades e a decisão mínima adotada para cada uma.
+
+    ===== ESPECIFICAÇÃO ([[ARQUIVO]]) =====
+    [[SPEC]]
+    ===== FIM DA ESPECIFICAÇÃO =====
+  expected_output: >
+    Plano técnico em Markdown com: tabela de requisitos (ID, descrição,
+    critério de aceitação), estrutura de arquivos, modelo de dados,
+    componentes de UI e ambiguidades resolvidas.
+
+implementar:
+  agent: desenvolvedor
+  description: >
+    Com base no plano técnico, implemente a aplicação completa.
+
+    Regras:
+    - Deve abrir com duplo clique em index.html (protocolo file://): nada de
+      módulos ES, fetch de arquivos locais, build ou servidor.
+    - Apenas HTML, CSS e JavaScript puro; bibliotecas externas só se a spec
+      pedir, e então via CDN.
+    - Comente no código o ID do requisito implementado (ex.: // RF-03).
+    - Código completo, sem "TODO" nem trechos omitidos.
+  expected_output: >
+    O conteúdo completo de cada arquivo da aplicação.
+
+revisar:
+  agent: revisor
+  description: >
+    Revise o código contra o plano técnico e a especificação original.
+
+    1. Para cada requisito, diga se foi atendido e onde no código.
+    2. Corrija bugs e requisitos faltantes diretamente no código.
+    3. Devolva a versão FINAL e COMPLETA de todos os arquivos, mais um
+       relatório de rastreabilidade em Markdown.
+
+    ===== ESPECIFICAÇÃO ORIGINAL =====
+    [[SPEC]]
+    ===== FIM =====
+  expected_output: >
+    Objeto com a lista de arquivos finais (caminho relativo e conteúdo
+    completo), o arquivo de entrada (index.html) e o relatório de
+    rastreabilidade requisito -> código -> status.
