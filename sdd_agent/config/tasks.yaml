@@ -1,5 +1,6 @@
-# Tarefas executadas em sequência. Marcadores [[NOME]] são substituídos em
-# Python (não usamos chaves para não conflitar com CSS/JS dentro das specs).
+# Etapas executadas em sequência, uma de cada vez (cada uma pode ser repetida
+# sozinha se o modelo falhar). Marcadores [[NOME]] são substituídos em Python;
+# não usamos chaves para não conflitar com CSS/JS dentro das specs.
 
 analisar:
   agent: analista
@@ -24,7 +25,7 @@ analisar:
 implementar:
   agent: desenvolvedor
   description: >
-    Com base no plano técnico, implemente a aplicação completa.
+    Implemente a aplicação completa seguindo o plano técnico abaixo.
 
     Regras:
     - Deve abrir com duplo clique em index.html (protocolo file://): nada de
@@ -33,13 +34,19 @@ implementar:
       pedir, e então via CDN.
     - Comente no código o ID do requisito implementado (ex.: // RF-03).
     - Código completo, sem "TODO" nem trechos omitidos.
+    - No campo relatorio, liste brevemente onde cada requisito foi implementado.
+
+    ===== PLANO TÉCNICO =====
+    [[PLANO]]
+    ===== FIM DO PLANO =====
   expected_output: >
-    O conteúdo completo de cada arquivo da aplicação.
+    Objeto com a lista de arquivos (caminho relativo e conteúdo completo), o
+    arquivo de entrada (index.html) e um relatório curto requisito -> código.
 
 revisar:
   agent: revisor
   description: >
-    Revise o código contra o plano técnico e a especificação original.
+    Revise o código abaixo contra o plano técnico e a especificação original.
 
     1. Para cada requisito, diga se foi atendido e onde no código.
     2. Corrija bugs e requisitos faltantes diretamente no código.
@@ -48,6 +55,10 @@ revisar:
 
     ===== ESPECIFICAÇÃO ORIGINAL =====
     [[SPEC]]
+    ===== PLANO TÉCNICO =====
+    [[PLANO]]
+    ===== CÓDIGO A REVISAR =====
+    [[CODIGO]]
     ===== FIM =====
   expected_output: >
     Objeto com a lista de arquivos finais (caminho relativo e conteúdo

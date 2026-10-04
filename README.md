@@ -16,7 +16,7 @@ e `RELATORIO_RASTREABILIDADE.md` (requisito → código → status).
 
 ## Instalação
 
-> O CrewAI exige **Python ≥3.10 e <3.14**. O `setup.sh` recria o `.venv` com 3.13.
+> O CrewAI exige **Python ≥3.10 e <3.14**. O `setup.sh` cria o `.venv` com 3.13.
 
 ```bash
 ./setup.sh                 # cria .venv (Python 3.13) e instala requirements.txt
@@ -32,7 +32,12 @@ Manual: `python3.13 -m venv .venv && source .venv/bin/activate && pip install -r
 python main.py specs/exemplo_tarefas.md --abrir
 ```
 
-Opções: `-o PASTA` (saída), `-q` (sem log dos agentes), `--abrir` (abre no navegador).
+Se o modelo estiver sobrecarregado (erro 503), o agente espera e tenta de novo,
+e depois passa para os modelos de `SDD_MODELOS_RESERVA` no `.env`. Para ver os
+modelos que sua chave pode usar: `python main.py --modelos`. Para forçar um modelo
+só nesta execução: `python main.py specs/x.md -m gemini/<nome>`.
+
+Opções: `-o PASTA` (saída), `-m MODELO`, `-q` (sem log dos agentes), `--abrir` (abre no navegador).
 
 ## Escrevendo uma especificação
 

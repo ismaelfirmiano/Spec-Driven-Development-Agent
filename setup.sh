@@ -26,7 +26,7 @@ rm -rf .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/pip install -r requirements.txt
 
-[ -f .env ] || { cp .env.example .env; echo ">> Criei .env — coloque sua GEMINI_API_KEY nele."; }
+[ -f .env ] || { cp .env.example .env; echo ">> Criado .env — coloque sua GEMINI_API_KEY nele."; }
 
 echo
 echo "Pronto. Ative com:  source .venv/bin/activate"
