@@ -16,15 +16,19 @@ e `RELATORIO_RASTREABILIDADE.md` (requisito → código → status).
 
 ## Instalação
 
-> O CrewAI exige **Python ≥3.10 e <3.14**. O `setup.sh` cria o `.venv` com 3.13.
+> O CrewAI exige **Python ≥3.10 e <3.14**. O `setup.sh` funciona em **macOS e Linux**:
+> usa um Python compatível já instalado ou instala o 3.13 (Homebrew no Mac, `uv` no Linux).
 
 ```bash
-./setup.sh                 # cria .venv (Python 3.13) e instala requirements.txt
+./setup.sh                 # cria .venv (Python 3.10–3.13) e instala requirements.txt
 source .venv/bin/activate
 # edite .env e coloque sua GEMINI_API_KEY (https://aistudio.google.com/apikey)
 ```
 
-Manual: `python3.13 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && cp .env.example .env`
+No Ubuntu/Debian, se a criação do `.venv` falhar, instale o pacote venv
+(ex.: `sudo apt install python3.12-venv`).
+
+Manual (qualquer sistema): `python3.13 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && cp .env.example .env`
 
 ## Uso
 
