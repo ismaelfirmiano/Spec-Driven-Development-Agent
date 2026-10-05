@@ -61,6 +61,12 @@ fi
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/pip install -r requirements.txt
 
+# Navegador usado pela validação automática do programa gerado.
+# Se falhar (ex.: sem permissão), o agente usa 'node --check' ou só verifica arquivos.
+echo ">> Instalando o Chromium para os testes automáticos..."
+.venv/bin/python -m playwright install chromium || \
+  echo "AVISO: não consegui instalar o Chromium; a validação será mais limitada."
+
 [ -f .env ] || { cp .env.example .env; echo ">> Criei .env — coloque sua GEMINI_API_KEY nele."; }
 
 echo

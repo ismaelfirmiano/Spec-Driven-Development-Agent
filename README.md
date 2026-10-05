@@ -7,12 +7,20 @@ três agentes e **Gemini** (Google Gen AI) como modelo.
 ## Pipeline
 
 ```
-spec.md ──► Analista de Requisitos ──► Desenvolvedor Front-end ──► Revisor QA ──► output/<spec>/
-            (plano + RF/RNF + critérios)  (HTML/CSS/JS comentado)    (corrige + rastreabilidade)
+spec.md ─► Analista ─► Desenvolvedor ─► [teste no navegador ─► corrigir]* ─► Revisor ─► [teste ─► corrigir]* ─► output/<spec>/
+           (plano RF/RNF)  (HTML/CSS/JS)     (Playwright, até 2 rodadas)        (QA)
 ```
 
-Saída em `output/<nome-da-spec>/`: os arquivos do programa, `PLANO_TECNICO.md`
-e `RELATORIO_RASTREABILIDADE.md` (requisito → código → status).
+O revisor é um LLM e pode aprovar código quebrado. Por isso, cada versão passa
+por uma **validação automática** (`sdd_agent/validacao.py`), que não depende do
+modelo: abre o `index.html` num navegador headless, captura erros de JavaScript,
+confere se os arquivos referenciados existem e envia os formulários para
+detectar recarregamento da página. Se algo falha, os erros voltam para o
+desenvolvedor corrigir. Sem Playwright, a validação usa `node --check`.
+
+Saída em `output/<nome-da-spec>/`: os arquivos do programa, `PLANO_TECNICO.md`,
+`RELATORIO_RASTREABILIDADE.md` (requisito → código → status) e `VALIDACAO.md`
+(resultado dos testes automáticos e correções feitas).
 
 ## Instalação
 

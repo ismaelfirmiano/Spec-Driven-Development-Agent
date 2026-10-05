@@ -15,3 +15,8 @@ python-dotenv>=1.0.0
 
 # Lê especificações com front-matter YAML (configs dos agentes)
 PyYAML>=6.0
+
+# Testa o programa gerado num navegador headless (detecta erros de JS e
+# formulários que recarregam a página). Depois de instalar, rode uma vez:
+#   python -m playwright install chromium
+playwright>=1.40

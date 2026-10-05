@@ -64,3 +64,24 @@ revisar:
     Objeto com a lista de arquivos finais (caminho relativo e conteúdo
     completo), o arquivo de entrada (index.html) e o relatório de
     rastreabilidade requisito -> código -> status.
+
+corrigir:
+  agent: desenvolvedor
+  description: >
+    O programa abaixo foi testado automaticamente em um navegador e FALHOU.
+    Corrija TODOS os problemas listados, sem remover funcionalidades e sem
+    alterar o que já funciona. Erros de sintaxe impedem o script inteiro de
+    rodar, então revise o arquivo com cuidado. Devolva todos os arquivos
+    completos.
+
+    ===== PROBLEMAS ENCONTRADOS PELO TESTE AUTOMÁTICO =====
+    [[PROBLEMAS]]
+    ===== PLANO TÉCNICO =====
+    [[PLANO]]
+    ===== CÓDIGO ATUAL =====
+    [[CODIGO]]
+    ===== FIM =====
+  expected_output: >
+    Objeto com a lista de arquivos corrigidos (caminho relativo e conteúdo
+    completo), o arquivo de entrada (index.html) e um relatório curto do que
+    foi corrigido.

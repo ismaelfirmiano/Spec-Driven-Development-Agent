@@ -8,6 +8,7 @@ resultado de cada etapa já fica salvo em disco.
 from __future__ import annotations
 
 import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -15,11 +16,14 @@ import yaml
 from crewai import LLM, Agent, Crew, Process, Task
 from pydantic import BaseModel, Field
 
+from .validacao import validar
+
 CONFIG_DIR = Path(__file__).parent / "config"
 MODELO_PADRAO = "gemini/gemini-3.8-flash"
 RESERVA_PADRAO = "gemini/gemini-flash-latest,gemini/gemini-flash-lite-latest"
 ESPERAS_SEGUNDOS = (15, 45)  # pausas entre tentativas no mesmo modelo
 MAX_TOKENS_PADRAO = 32768    # espaço para o código completo na resposta
+MAX_CORRECOES = 2            # rodadas de "testar -> corrigir" por versão
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +88,7 @@ def _tipo_erro(erro: Exception) -> str:
 def _rodar_etapa(nome: str, valores: dict[str, str], modelo: str | None, verbose: bool):
     cfg_agentes = _carregar_yaml("agents.yaml")
     cfg = _carregar_yaml("tasks.yaml")[nome]
-    estruturada = nome in ("implementar", "revisar")
+    estruturada = nome in ("implementar", "revisar", "corrigir")
 
     ultimo_erro: Exception | None = None
     for nome_modelo in modelos_candidatos(modelo):
@@ -141,8 +145,13 @@ def _caminho_seguro(base: Path, relativo: str) -> Path:
     return destino
 
 
-def gravar(programa: ProgramaGerado, pasta: Path) -> Path:
+def gravar(programa: ProgramaGerado, pasta: Path, anterior: ProgramaGerado | None = None) -> Path:
     pasta.mkdir(parents=True, exist_ok=True)
+    if anterior:  # apaga arquivos da versão anterior que não existem na nova
+        novos = {a.caminho for a in programa.arquivos}
+        for arq in anterior.arquivos:
+            if arq.caminho not in novos:
+                _caminho_seguro(pasta, arq.caminho).unlink(missing_ok=True)
     for arq in programa.arquivos:
         destino = _caminho_seguro(pasta, arq.caminho)
         destino.parent.mkdir(parents=True, exist_ok=True)
@@ -154,6 +163,54 @@ def gravar(programa: ProgramaGerado, pasta: Path) -> Path:
 
 def _como_texto(programa: ProgramaGerado) -> str:
     return "\n\n".join(f"--- ARQUIVO: {a.caminho} ---\n{a.conteudo}" for a in programa.arquivos)
+
+
+def _testar(programa: ProgramaGerado) -> tuple[list[str], str]:
+    """Grava o programa numa pasta temporária e roda a validação automática."""
+    with tempfile.TemporaryDirectory() as tmp:
+        gravar(programa, Path(tmp))
+        return validar(Path(tmp), programa.entrada or "index.html")
+
+
+def testar_e_corrigir(
+    programa: ProgramaGerado, valores: dict[str, str], modelo: str | None, verbose: bool, rotulo: str
+) -> tuple[ProgramaGerado, list[str], str, list[str]]:
+    """Testa o programa; se falhar, pede correção ao desenvolvedor (até MAX_CORRECOES vezes).
+    Devolve (programa, problemas restantes, método, histórico)."""
+    historico: list[str] = []
+    problemas, metodo = _testar(programa)
+    for rodada in range(1, MAX_CORRECOES + 1):
+        if not problemas:
+            break
+        print(f"\n>> Teste automático ({rotulo}) encontrou {len(problemas)} problema(s):")
+        for p in problemas:
+            print("   - " + p.splitlines()[0])
+        historico.append(f"{rotulo}, rodada {rodada}: " + " | ".join(p.splitlines()[0] for p in problemas))
+        try:
+            programa = _rodar_etapa(
+                "corrigir",
+                {**valores, "CODIGO": _como_texto(programa), "PROBLEMAS": "\n".join(f"- {p}" for p in problemas)},
+                modelo,
+                verbose,
+            )
+        except RuntimeError as erro:
+            print(f">> Correção não concluída: {erro}")
+            break
+        problemas, metodo = _testar(programa)
+    if not problemas:
+        print(f"\n>> Teste automático ({rotulo}): OK [{metodo}]")
+    return programa, problemas, metodo, historico
+
+
+def _relatorio_validacao(problemas: list[str], metodo: str, historico: list[str]) -> str:
+    linhas = ["# Validação automática", "", f"Método: {metodo}", ""]
+    if problemas:
+        linhas += ["**Status: FALHOU** — problemas restantes:", ""] + [f"- {p}" for p in problemas]
+    else:
+        linhas += ["**Status: OK** — nenhum problema encontrado."]
+    if historico:
+        linhas += ["", "## Correções feitas a partir dos testes", ""] + [f"- {h}" for h in historico]
+    return "\n".join(linhas) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -170,16 +227,34 @@ def gerar_aplicacao(
     (pasta_saida / "PLANO_TECNICO.md").write_text(plano, encoding="utf-8")
     valores["PLANO"] = plano
 
-    # 2) Implementação -> primeira versão do programa, já utilizável
+    # 2) Implementação -> testada no navegador e corrigida até passar
     rascunho = _rodar_etapa("implementar", valores, modelo, verbose)
+    rascunho, prob_rascunho, metodo, historico = testar_e_corrigir(
+        rascunho, valores, modelo, verbose, "implementação"
+    )
     entrada = gravar(rascunho, pasta_saida)
     print(f"\n>> Primeira versão salva em {pasta_saida}")
     valores["CODIGO"] = _como_texto(rascunho)
 
-    # 3) Revisão -> versão final (se falhar, fica a versão do desenvolvedor)
+    # 3) Revisão -> também testada. Se a revisão piorar o programa, fica o anterior.
+    final, prob_final = rascunho, prob_rascunho
     try:
-        final = _rodar_etapa("revisar", valores, modelo, verbose)
-        entrada = gravar(final, pasta_saida)
+        revisado = _rodar_etapa("revisar", valores, modelo, verbose)
+        revisado, prob_rev, metodo, hist_rev = testar_e_corrigir(
+            revisado, valores, modelo, verbose, "revisão"
+        )
+        historico += hist_rev
+        if len(prob_rev) <= len(prob_rascunho):
+            final, prob_final = revisado, prob_rev
+        else:
+            print("\n>> AVISO: a versão revisada ficou pior nos testes; mantida a anterior.")
     except RuntimeError as erro:
         print(f"\n>> AVISO: revisão não concluída ({erro}). Mantida a versão do desenvolvedor.")
+
+    entrada = gravar(final, pasta_saida, anterior=rascunho)
+    (pasta_saida / "VALIDACAO.md").write_text(
+        _relatorio_validacao(prob_final, metodo, historico), encoding="utf-8"
+    )
+    if prob_final:
+        print(f"\n>> ATENÇÃO: o programa ainda tem {len(prob_final)} problema(s). Veja VALIDACAO.md.")
     return entrada
