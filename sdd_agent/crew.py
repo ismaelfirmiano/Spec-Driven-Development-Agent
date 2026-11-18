@@ -8,6 +8,7 @@ resultado de cada etapa já fica salvo em disco.
 from __future__ import annotations
 
 import os
+import re
 import time
 from pathlib import Path
 
@@ -141,19 +142,137 @@ def _caminho_seguro(base: Path, relativo: str) -> Path:
     return destino
 
 
-def gravar(programa: ProgramaGerado, pasta: Path) -> Path:
+def gravar(programa: ProgramaGerado, pasta: Path, relatorio_sdd: bool = True) -> Path:
     pasta.mkdir(parents=True, exist_ok=True)
     for arq in programa.arquivos:
         destino = _caminho_seguro(pasta, arq.caminho)
         destino.parent.mkdir(parents=True, exist_ok=True)
         destino.write_text(arq.conteudo, encoding="utf-8")
-    if programa.relatorio:
+    if relatorio_sdd and programa.relatorio:
         (pasta / "RELATORIO_RASTREABILIDADE.md").write_text(programa.relatorio, encoding="utf-8")
     return _caminho_seguro(pasta, programa.entrada or "index.html")
 
 
 def _como_texto(programa: ProgramaGerado) -> str:
     return "\n\n".join(f"--- ARQUIVO: {a.caminho} ---\n{a.conteudo}" for a in programa.arquivos)
+
+
+def gerar_aplicacao_por_prompt(
+    prompt: str, pasta_saida: Path, verbose: bool = True, modelo: str | None = None
+) -> Path:
+    """Gera um protótipo direto a partir de linguagem natural, fora do pipeline SDD."""
+    programa = _rodar_etapa("gerar_natural", {"PROMPT": prompt}, modelo, verbose)
+    if not isinstance(programa, ProgramaGerado):
+        raise RuntimeError("O agente não retornou os arquivos estruturados do protótipo.")
+    entrada = gravar(programa, pasta_saida, relatorio_sdd=False)
+    if programa.relatorio:
+        (pasta_saida / "LIMITACOES.md").write_text(
+            "# Limitações e decisões do modo linguagem natural\n\n" + programa.relatorio,
+            encoding="utf-8",
+        )
+    return entrada
+
+
+def _ultima_pasta_gerada(tipo: str = "auto") -> Path:
+    raizes = {
+        "sdd": Path("output"),
+        "natural": Path("natural_language"),
+        "auto": None,
+    }
+    candidatos: list[Path] = []
+    if tipo == "auto":
+        for raiz in (Path("output"), Path("natural_language")):
+            if raiz.is_dir():
+                candidatos.extend(p for p in raiz.iterdir() if p.is_dir())
+    else:
+        raiz = raizes[tipo]
+        if raiz.is_dir():
+            candidatos.extend(p for p in raiz.iterdir() if p.is_dir())
+    if not candidatos:
+        raise RuntimeError("Nenhuma geração encontrada em output/ ou natural_language/.")
+    return max(candidatos, key=lambda p: p.stat().st_mtime)
+
+
+def _tipo_geracao(base: Path) -> str:
+    if base.joinpath("PLANO_TECNICO.md").is_file() or base.joinpath("RELATORIO_RASTREABILIDADE.md").is_file():
+        return "sdd"
+    if base.joinpath("LIMITACOES.md").is_file() or "natural_language" in base.parts:
+        return "natural"
+    return "natural"
+
+
+def _ler_documentos(base: Path) -> str:
+    caminhos = [base] if base.is_file() else sorted(base.rglob("*"))
+    extensoes = {".html", ".css", ".js", ".md", ".json", ".txt"}
+    partes: list[str] = []
+    for caminho in caminhos:
+        if not caminho.is_file() or caminho.suffix.lower() not in extensoes:
+            continue
+        if any(parte in {".git", ".venv", "node_modules"} for parte in caminho.parts):
+            continue
+        try:
+            conteudo = caminho.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        relativo = caminho.name if base.is_file() else caminho.relative_to(base).as_posix()
+        if len(conteudo) > 100_000:
+            conteudo = conteudo[:100_000] + "\n[... conteúdo truncado ...]"
+        partes.append(f"--- ARQUIVO: {relativo} ---\n{conteudo}")
+    if not partes:
+        raise RuntimeError(f"Nenhum arquivo de código/documentação encontrado em {base}.")
+    return "\n\n".join(partes)
+
+
+def avaliar_codigo(
+    alvo: Path | None = None,
+    verbose: bool = True,
+    modelo: str | None = None,
+    tipo: str = "auto",
+) -> Path:
+    """Avalia o último SDD/natural ou o alvo informado e grava o relatório."""
+    if tipo not in {"auto", "sdd", "natural"}:
+        raise ValueError("tipo deve ser auto, sdd ou natural")
+    base = _ultima_pasta_gerada(tipo) if alvo is None else alvo
+    if not base.exists():
+        raise RuntimeError(f"Caminho para avaliação não encontrado: {base}")
+
+    tipo_detectado = tipo if tipo in {"sdd", "natural"} else _tipo_geracao(base)
+    codigo = _ler_documentos(base)
+    candidatos = []
+    if base.is_dir():
+        candidatos.extend([
+            base / "ESPECIFICACAO_DERIVADA.md",
+            base / "PLANO_TECNICO.md",
+            base / "RELATORIO_RASTREABILIDADE.md",
+            base / "LIMITACOES.md",
+            base / "README.md",
+        ])
+    especificacao = "\n\n".join(
+        f"--- {caminho.name} ---\n{caminho.read_text(encoding='utf-8')}"
+        for caminho in candidatos
+        if caminho.is_file()
+    ) or "Não há especificação ou plano armazenado no alvo. Avaliar apenas contra os arquivos presentes."
+
+    relatorio = _rodar_etapa(
+        "avaliar",
+        {
+            "ESPECIFICACAO": especificacao,
+            "CODIGO": codigo,
+            "TIPO_AVALIACAO": f"{tipo_detectado.upper()} — avalie conforme este tipo de geração.",
+        },
+        modelo,
+        verbose,
+    )
+    destino = base if base.is_dir() else base.parent
+    destino.mkdir(parents=True, exist_ok=True)
+    arquivo = destino / "RELATORIO_AVALIACAO.md"
+    cabecalho = f"# Relatório de avaliação — {tipo_detectado.upper()}\n\n"
+    if relatorio.lstrip().startswith("#"):
+        relatorio = cabecalho + relatorio.lstrip()
+    else:
+        relatorio = cabecalho + relatorio
+    arquivo.write_text(relatorio, encoding="utf-8")
+    return arquivo
 
 
 # ---------------------------------------------------------------------------

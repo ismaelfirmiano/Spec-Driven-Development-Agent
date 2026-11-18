@@ -43,6 +43,42 @@ só nesta execução: `python main.py specs/x.md -m gemini/<nome>`.
 
 Opções: `-o PASTA` (saída), `-m MODELO`, `-q` (sem log dos agentes), `--abrir` (abre no navegador).
 
+### Criar com linguagem natural
+
+Use `--prompt` para gerar uma especificação derivada e executar todo o pipeline SDD:
+
+```bash
+python main.py --prompt "Crie um gerenciador de tarefas responsivo com prioridade, filtros e persistência local" --abrir
+```
+
+O modo não usa o pipeline SDD padrão. A saída fica separada em
+`natural_language/<nome-do-prompt>/`, com o site em `index.html` e decisões em
+`LIMITACOES.md`.
+
+### Avaliar o código
+
+Avalie automaticamente a geração SDD mais recente:
+
+```bash
+python main.py --avaliar
+```
+
+Ou informe um arquivo ou pasta específica:
+
+```bash
+python main.py --avaliar output/exemplo_tarefas
+python main.py --avaliar output/exemplo_tarefas/script.js
+```
+
+O avaliador detecta automaticamente se a geração é SDD ou linguagem natural. O tipo também pode ser escolhido:
+
+```bash
+python main.py --avaliar output/exemplo_tarefas --tipo-avaliacao sdd
+python main.py --avaliar natural_language/meu_site --tipo-avaliacao natural
+```
+
+O relatório é gravado como `RELATORIO_AVALIACAO.md` no diretório analisado e identifica o tipo avaliado.
+
 ## Escrevendo uma especificação
 
 Markdown livre; funciona melhor com requisitos identificados (`RF-01`,

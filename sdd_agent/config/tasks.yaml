@@ -64,3 +64,62 @@ revisar:
     Objeto com a lista de arquivos finais (caminho relativo e conteúdo
     completo), o arquivo de entrada (index.html) e o relatório de
     rastreabilidade requisito -> código -> status.
+
+gerar_natural:
+  agent: interpretador
+  description: >
+    Interprete o pedido diretamente e crie uma aplicação web próxima da solicitação.
+
+    Regras:
+    - Entregue HTML, CSS e JavaScript completo em arquivos separados.
+    - Não use SDD, plano técnico SDD, rastreabilidade formal ou backend.
+    - O arquivo index.html deve abrir diretamente pelo navegador.
+    - Use dados fictícios claramente identificados quando necessário.
+    - Use JavaScript ES6+, localStorage quando persistência fizer sentido e sem
+      dependências externas desnecessárias.
+    - Crie interface responsiva a partir de 320 px, com labels, teclado, foco visível
+      e estados vazios/erro/sucesso compatíveis com o pedido.
+    - Não omita implementações com TODO ou comentário de conteúdo pendente.
+    - Faça estimativas visuais realistas, sem inventar integrações não pedidas.
+    - No campo relatorio, liste o que foi interpretado do pedido e suas limitações.
+
+    ===== PEDIDO DO USUÁRIO =====
+    [[PROMPT]]
+    ===== FIM =====
+  expected_output: >
+    Objeto com arquivos HTML/CSS/JS completos, arquivo de entrada index.html e
+    relatório curto explicando decisões da linguagem natural e limitações.
+
+avaliar:
+  agent: avaliador
+  description: >
+    Avalie somente o código e a documentação fornecidos abaixo. Não suponha
+    execução, testes ou dependências que não estejam evidenciados.
+
+    ===== TIPO DA GERAÇÃO =====
+    [[TIPO_AVALIACAO]]
+
+    Para uma geração SDD, verifique matriz de rastreabilidade, conformidade com
+    especificação/plano, critérios de aceitação, testes planejados e realizados,
+    regressões e qualidade técnica.
+
+    Para uma geração de linguagem natural, use o pedido/documentação disponível
+    como contexto. Não exigir rastreabilidade formal SDD. Verifique proximidade com
+    o pedido, consistência visual, estados vazios/erro/sucesso, interações,
+    persistência, responsividade, acessibilidade e limitações declaradas.
+
+    Nos dois tipos, verifique arquitetura modular, separação de responsabilidades,
+    legibilidade, tratamento de erros, segurança, prevenção de HTML/JS importado,
+    compatibilidade de navegador e performance.
+
+    Para cada achado use severidade (CRÍTICA/ALTA/MÉDIA/BAIXA), arquivo e linha
+    aproximada, evidência concreta, impacto e correção sugerida.
+
+    ===== ESPECIFICAÇÃO/PLANO =====
+    [[ESPECIFICACAO]]
+    ===== CÓDIGO =====
+    [[CODIGO]]
+    ===== FIM =====
+  expected_output: >
+    Relatório Markdown em português com resumo executivo, achados ordenados por
+    severidade, evidências, correções sugeridas, requisitos verificados e gaps.
