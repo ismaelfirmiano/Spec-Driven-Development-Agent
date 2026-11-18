@@ -85,7 +85,7 @@ def _tipo_erro(erro: Exception) -> str:
 def _rodar_etapa(nome: str, valores: dict[str, str], modelo: str | None, verbose: bool):
     cfg_agentes = _carregar_yaml("agents.yaml")
     cfg = _carregar_yaml("tasks.yaml")[nome]
-    estruturada = nome in ("implementar", "revisar")
+    estruturada = nome in ("implementar", "revisar", "gerar_natural", "avaliar", "comparar")
 
     ultimo_erro: Exception | None = None
     for nome_modelo in modelos_candidatos(modelo):
@@ -165,9 +165,25 @@ def gerar_aplicacao_por_prompt(
     if not isinstance(programa, ProgramaGerado):
         raise RuntimeError("O agente não retornou os arquivos estruturados do protótipo.")
     entrada = gravar(programa, pasta_saida, relatorio_sdd=False)
+    (pasta_saida / "PEDIDO_NATURAL.md").write_text(
+        "# Pedido em linguagem natural\n\n" + prompt,
+        encoding="utf-8",
+    )
     if programa.relatorio:
         (pasta_saida / "LIMITACOES.md").write_text(
             "# Limitações e decisões do modo linguagem natural\n\n" + programa.relatorio,
+            encoding="utf-8",
+        )
+        rastreabilidade = (
+            "# Rastreabilidade da linguagem natural\n\n"
+            "| Ponto solicitado | Implementação | Arquivo / linha | Status |\n"
+            "|---|---|---|---|\n"
+            "| Pedido original | Verificar no relatório abaixo | index.html, style.css, script.js | Ver tabela detalhada |\n\n"
+            "## Evidências e detalhes\n\n"
+            + programa.relatorio
+        )
+        (pasta_saida / "RASTREABILIDADE_NATURAL.md").write_text(
+            rastreabilidade,
             encoding="utf-8",
         )
     return entrada
@@ -223,6 +239,40 @@ def _ler_documentos(base: Path) -> str:
     return "\n\n".join(partes)
 
 
+def comparar_codigo(
+    sdd: Path,
+    natural: Path,
+    verbose: bool = True,
+    modelo: str | None = None,
+) -> Path:
+    """Compara uma geração SDD com uma geração em linguagem natural."""
+    if not sdd.exists():
+        raise RuntimeError(f"Geração SDD não encontrada: {sdd}")
+    if not natural.exists():
+        raise RuntimeError(f"Geração natural não encontrada: {natural}")
+
+    codigo_sdd = _ler_documentos(sdd)
+    codigo_natural = _ler_documentos(natural)
+    resultado = _rodar_etapa(
+        "comparar",
+        {"CODIGO_SDD": codigo_sdd, "CODIGO_NATURAL": codigo_natural},
+        modelo,
+        verbose,
+    )
+    if not isinstance(resultado, ProgramaGerado):
+        raise RuntimeError("O avaliador comparativo não retornou um relatório estruturado.")
+
+    nome_sdd = sdd.name if sdd.is_dir() else sdd.stem
+    nome_natural = natural.name if natural.is_dir() else natural.stem
+    destino = Path("comparacoes") / f"{nome_sdd}_vs_{nome_natural}"
+    destino.mkdir(parents=True, exist_ok=True)
+    relatorio = resultado.relatorio or "# Relatório comparativo\n\nNenhuma divergência textualmente registrada."
+    relatorio = f"# Comparação — SDD vs Linguagem Natural\n\n{relatorio.lstrip('#').lstrip()}"
+    (destino / "RELATORIO_COMPARATIVO.md").write_text(relatorio, encoding="utf-8")
+
+    return destino
+
+
 def avaliar_codigo(
     alvo: Path | None = None,
     verbose: bool = True,
@@ -245,6 +295,8 @@ def avaliar_codigo(
             base / "PLANO_TECNICO.md",
             base / "RELATORIO_RASTREABILIDADE.md",
             base / "LIMITACOES.md",
+            base / "PEDIDO_NATURAL.md",
+            base / "RASTREABILIDADE_NATURAL.md",
             base / "README.md",
         ])
     especificacao = "\n\n".join(
@@ -253,18 +305,28 @@ def avaliar_codigo(
         if caminho.is_file()
     ) or "Não há especificação ou plano armazenado no alvo. Avaliar apenas contra os arquivos presentes."
 
-    relatorio = _rodar_etapa(
+    programa_corrigido = _rodar_etapa(
         "avaliar",
         {
             "ESPECIFICACAO": especificacao,
             "CODIGO": codigo,
-            "TIPO_AVALIACAO": f"{tipo_detectado.upper()} — avalie conforme este tipo de geração.",
+            "TIPO_AVALIACAO": f"{tipo_detectado.upper()} — avalie e corrija conforme este tipo de geração.",
         },
         modelo,
         verbose,
     )
+    if not isinstance(programa_corrigido, ProgramaGerado):
+        raise RuntimeError("O avaliador não retornou arquivos corrigidos estruturados.")
+
     destino = base if base.is_dir() else base.parent
     destino.mkdir(parents=True, exist_ok=True)
+    if base.is_dir():
+        gravar(programa_corrigido, destino, relatorio_sdd=False)
+    elif base.is_file() and programa_corrigido.arquivos:
+        arquivo_corrigido = programa_corrigido.arquivos[0]
+        base.write_text(arquivo_corrigido.conteudo, encoding="utf-8")
+
+    relatorio = programa_corrigido.relatorio or "A avaliação não produziu achados textuais."
     arquivo = destino / "RELATORIO_AVALIACAO.md"
     cabecalho = f"# Relatório de avaliação — {tipo_detectado.upper()}\n\n"
     if relatorio.lstrip().startswith("#"):
@@ -272,6 +334,16 @@ def avaliar_codigo(
     else:
         relatorio = cabecalho + relatorio
     arquivo.write_text(relatorio, encoding="utf-8")
+    if tipo_detectado == "natural":
+        matriz = (
+            "# Rastreabilidade da linguagem natural\n\n"
+            "| Ponto solicitado | Implementação encontrada | Arquivo / linha | Status | Evidência |\n"
+            "|---|---|---|---|---|\n"
+            "| Derivado do pedido | Ver matriz detalhada no relatório de avaliação | Arquivos HTML/CSS/JS | Ver abaixo | Evidências verificadas no código |\n\n"
+            "## Matriz detalhada da avaliação\n\n"
+            + relatorio
+        )
+        (destino / "RASTREABILIDADE_NATURAL.md").write_text(matriz, encoding="utf-8")
     return arquivo
 
 

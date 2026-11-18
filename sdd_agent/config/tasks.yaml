@@ -68,7 +68,10 @@ revisar:
 gerar_natural:
   agent: interpretador
   description: >
-    Interprete o pedido diretamente e crie uma aplicação web próxima da solicitação.
+    Crie uma aplicação web pequena diretamente a partir do pedido.
+
+    Prefira a versão mais simples que funcione. Use apenas index.html, style.css
+    e script.js, salvo quando o pedido exigir outra estrutura clara.
 
     Regras:
     - Entregue HTML, CSS e JavaScript completo em arquivos separados.
@@ -81,20 +84,23 @@ gerar_natural:
       e estados vazios/erro/sucesso compatíveis com o pedido.
     - Não omita implementações com TODO ou comentário de conteúdo pendente.
     - Faça estimativas visuais realistas, sem inventar integrações não pedidas.
-    - No campo relatorio, liste o que foi interpretado do pedido e suas limitações.
+    - No campo relatorio, liste o que foi interpretado do pedido, suas limitações
+      e uma matriz de rastreabilidade leve com: ponto solicitado, implementação,
+      arquivo/linha aproximada e status (atendido/parcial/não atendido).
 
     ===== PEDIDO DO USUÁRIO =====
     [[PROMPT]]
     ===== FIM =====
   expected_output: >
     Objeto com arquivos HTML/CSS/JS completos, arquivo de entrada index.html e
-    relatório curto explicando decisões da linguagem natural e limitações.
+    relatório curto com decisões, limitações e matriz de rastreabilidade natural.
 
 avaliar:
   agent: avaliador
   description: >
-    Avalie somente o código e a documentação fornecidos abaixo. Não suponha
-    execução, testes ou dependências que não estejam evidenciados.
+    Avalie o código e a documentação fornecidos abaixo. Não suponha execução,
+    testes ou dependências que não estejam evidenciados. Corrija os problemas
+    reais encontrados e devolva o conteúdo completo dos arquivos afetados.
 
     ===== TIPO DA GERAÇÃO =====
     [[TIPO_AVALIACAO]]
@@ -113,7 +119,8 @@ avaliar:
     compatibilidade de navegador e performance.
 
     Para cada achado use severidade (CRÍTICA/ALTA/MÉDIA/BAIXA), arquivo e linha
-    aproximada, evidência concreta, impacto e correção sugerida.
+    aproximada, evidência concreta, impacto e correção aplicada. Não devolva apenas
+    sugestões; devolva o arquivo completo já corrigido.
 
     ===== ESPECIFICAÇÃO/PLANO =====
     [[ESPECIFICACAO]]
@@ -121,5 +128,36 @@ avaliar:
     [[CODIGO]]
     ===== FIM =====
   expected_output: >
-    Relatório Markdown em português com resumo executivo, achados ordenados por
-    severidade, evidências, correções sugeridas, requisitos verificados e gaps.
+    Objeto com a versão corrigida completa dos arquivos afetados (caminho relativo
+    e conteúdo), index.html como entrada e um relatório Markdown em português com
+    resumo executivo, achados por severidade, evidências, correções aplicadas,
+    requisitos verificados e gaps restantes.
+
+    Quando o tipo for linguagem natural, inclua uma matriz de rastreabilidade
+    leve: ponto solicitado, implementação encontrada, arquivo/linha, status
+    (atendido/parcial/não atendido) e evidência. Não exigir IDs RF/RNF formais.
+
+comparar:
+  agent: avaliador
+  description: >
+    Compare as duas implementações abaixo. Considere o contexto SDD formal da
+    primeira geração e o pedido direto da segunda, mas avalie ambos pelos mesmos
+    critérios de engenharia de software: requisitos, modularidade, segurança,
+    acessibilidade, responsividade, persistência, tratamento de erros, testes,
+    documentação e manutenibilidade.
+
+    Não declare superioridade sem evidência. Liste divergências por arquivo,
+    severidade e impacto. Identifique o que o SDD possui e o natural não possui,
+    e vice-versa. Corrija bugs apenas quando estiver claro em qual versão; não
+    misture arquivos das duas gerações.
+
+    ===== GERAÇÃO SDD =====
+    [[CODIGO_SDD]]
+    ===== GERAÇÃO LINGUAGEM NATURAL =====
+    [[CODIGO_NATURAL]]
+    ===== FIM =====
+  expected_output: >
+    Objeto com os arquivos completos corrigidos de ambas as versões, entrada
+    index.html para cada comparação e um relatório Markdown com resumo comparativo,
+    matriz lado a lado, requisitos/pontos atendidos, divergências, severidades,
+    recomendações e conclusão técnica.

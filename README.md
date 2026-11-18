@@ -1,8 +1,8 @@
 # Spec-Driven-Development-Agent
 
-Agente de IA que lê um arquivo de especificação e gera um programa web
-(HTML/CSS/JS) pronto para abrir no navegador. Usa **CrewAI** para orquestrar
-três agentes e **Gemini** (Google Gen AI) como modelo.
+Agente de IA que transforma especificações ou pedidos em linguagem natural
+em programas web (HTML/CSS/JS) prontos para abrir no navegador. Usa **CrewAI**
+para orquestrar agentes especializados e **Gemini** (Google Gen AI) como modelo.
 
 ## Pipeline
 
@@ -45,7 +45,7 @@ Opções: `-o PASTA` (saída), `-m MODELO`, `-q` (sem log dos agentes), `--abrir
 
 ### Criar com linguagem natural
 
-Use `--prompt` para gerar uma especificação derivada e executar todo o pipeline SDD:
+Use `--prompt` para gerar diretamente uma aplicação em linguagem natural, fora do pipeline SDD:
 
 ```bash
 python main.py --prompt "Crie um gerenciador de tarefas responsivo com prioridade, filtros e persistência local" --abrir
@@ -53,11 +53,11 @@ python main.py --prompt "Crie um gerenciador de tarefas responsivo com prioridad
 
 O modo não usa o pipeline SDD padrão. A saída fica separada em
 `natural_language/<nome-do-prompt>/`, com o site em `index.html` e decisões em
-`LIMITACOES.md`.
+`LIMITACOES.md`, `PEDIDO_NATURAL.md` e `RASTREABILIDADE_NATURAL.md`.
 
 ### Avaliar o código
 
-Avalie automaticamente a geração SDD mais recente:
+Avalie e corrija automaticamente a geração SDD ou natural mais recente:
 
 ```bash
 python main.py --avaliar
@@ -77,7 +77,20 @@ python main.py --avaliar output/exemplo_tarefas --tipo-avaliacao sdd
 python main.py --avaliar natural_language/meu_site --tipo-avaliacao natural
 ```
 
-O relatório é gravado como `RELATORIO_AVALIACAO.md` no diretório analisado e identifica o tipo avaliado.
+Os arquivos corrigidos substituem as versões anteriores na própria pasta analisada.
+O relatório é gravado como `RELATORIO_AVALIACAO.md` e identifica o tipo avaliado.
+
+### Comparar SDD com linguagem natural
+
+```bash
+python main.py --comparar output/exemplo_tarefas natural_language/meu_site
+```
+
+O relatório fica em `comparacoes/<sdd>_vs_<natural>/RELATORIO_COMPARATIVO.md`
+e não modifica nenhuma das duas pastas originais.
+
+No modo linguagem natural, o relatório pode incluir uma rastreabilidade leve:
+`ponto solicitado → implementação → arquivo/linha → status`, sem exigir IDs RF/RNF.
 
 ## Escrevendo uma especificação
 
@@ -92,5 +105,7 @@ main.py                    CLI
 sdd_agent/crew.py          agentes, tarefas, saída estruturada e gravação
 sdd_agent/config/*.yaml    papéis dos agentes e descrições das tarefas
 specs/                     especificações de entrada
-output/                    programas gerados (ignorado pelo git)
+output/                    programas gerados por SDD (ignorado pelo git)
+natural_language/          programas gerados por linguagem natural (ignorado pelo git)
+comparacoes/               relatórios comparativos SDD vs linguagem natural (ignorado pelo git)
 ```

@@ -5,7 +5,7 @@ Uso:
     python main.py specs/minha_spec.md --abrir         # gera e abre no navegador
     python main.py specs/minha_spec.md -o saida/ -q    # pasta própria, sem logs
     python main.py --prompt "Crie um gerenciador de tarefas web" # cria pela linguagem natural
-    python main.py --avaliar                             # avalia a geração mais recente
+    python main.py --avaliar                             # avalia e corrige a geração mais recente
     python main.py --avaliar output/exemplo_tarefas      # avalia uma pasta específica
     python main.py --modelos                           # lista modelos Gemini disponíveis
 """
@@ -28,7 +28,8 @@ def main() -> int:
     parser.add_argument("-q", "--quieto", action="store_true", help="Oculta o log detalhado dos agentes")
     parser.add_argument("-m", "--modelo", help="Modelo a usar nesta execução (ex.: gemini/gemini-3.8-flash)")
     parser.add_argument("--prompt", help="Cria o programa a partir de um pedido em linguagem natural")
-    parser.add_argument("--avaliar", nargs="?", const="auto", metavar="CAMINHO", help="Avalia o último código SDD/natural ou uma pasta/arquivo informado")
+    parser.add_argument("--avaliar", nargs="?", const="auto", metavar="CAMINHO", help="Avalia e corrige o último código SDD/natural ou uma pasta/arquivo informado")
+    parser.add_argument("--comparar", nargs=2, metavar=("SDD", "NATURAL"), help="Compara uma geração SDD com uma geração em linguagem natural")
     parser.add_argument("--tipo-avaliacao", choices=("auto", "sdd", "natural"), default="auto", help="Tipo da avaliação: automático, SDD ou linguagem natural")
     parser.add_argument("--modelos", action="store_true", help="Lista os modelos Gemini disponíveis para sua chave")
     args = parser.parse_args()
@@ -36,19 +37,38 @@ def main() -> int:
     if args.modelos:
         return listar_modelos()
 
-    if args.prompt and args.avaliar:
-        parser.error("use --prompt ou --avaliar, não os dois modos ao mesmo tempo")
+    modos = sum(bool(valor) for valor in (args.prompt, args.avaliar, args.comparar))
+    if modos > 1:
+        parser.error("use somente um modo por vez: --prompt, --avaliar ou --comparar")
 
     # Import adiado: deixa --help rápido e dá erro claro se faltar dependência.
-    from sdd_agent import avaliar_codigo, gerar_aplicacao, gerar_aplicacao_por_prompt
+    from sdd_agent import avaliar_codigo, comparar_codigo, gerar_aplicacao, gerar_aplicacao_por_prompt
+
+    if args.comparar:
+        try:
+            relatorio = comparar_codigo(
+                Path(args.comparar[0]),
+                Path(args.comparar[1]),
+                verbose=not args.quieto,
+                modelo=args.modelo,
+            )
+        except (RuntimeError, ValueError, FileNotFoundError) as erro:
+            print(f"Erro na comparação: {erro}", file=sys.stderr)
+            return 1
+        print(f"\nComparação gravada em: {relatorio.resolve()}")
+        return 0
 
     if args.avaliar:
-        relatorio = avaliar_codigo(
-            None if args.avaliar == "auto" else Path(args.avaliar),
-            verbose=not args.quieto,
-            modelo=args.modelo,
-            tipo=args.tipo_avaliacao,
-        )
+        try:
+            relatorio = avaliar_codigo(
+                None if args.avaliar == "auto" else Path(args.avaliar),
+                verbose=not args.quieto,
+                modelo=args.modelo,
+                tipo=args.tipo_avaliacao,
+            )
+        except (RuntimeError, ValueError, FileNotFoundError) as erro:
+            print(f"Erro na avaliação: {erro}", file=sys.stderr)
+            return 1
         print(f"\nAvaliação gravada em: {relatorio.resolve()}")
         return 0
 
@@ -58,9 +78,13 @@ def main() -> int:
         import re
         slug = re.sub(r"[^a-z0-9]+", "_", args.prompt.lower()).strip("_")[:50] or "prompt"
         pasta = args.saida or Path("natural_language") / slug
-        entrada = gerar_aplicacao_por_prompt(
-            args.prompt, pasta, verbose=not args.quieto, modelo=args.modelo
-        )
+        try:
+            entrada = gerar_aplicacao_por_prompt(
+                args.prompt, pasta, verbose=not args.quieto, modelo=args.modelo
+            )
+        except (RuntimeError, ValueError, FileNotFoundError) as erro:
+            print(f"Erro na geração por linguagem natural: {erro}", file=sys.stderr)
+            return 1
         print(f"\nPrograma gerado em: {pasta.resolve()}")
         print(f"Abra no navegador:  {entrada.as_uri()}")
         if args.abrir:
@@ -74,7 +98,11 @@ def main() -> int:
         return 1
 
     pasta = args.saida or Path("output") / args.spec.stem
-    entrada = gerar_aplicacao(args.spec, pasta, verbose=not args.quieto, modelo=args.modelo)
+    try:
+        entrada = gerar_aplicacao(args.spec, pasta, verbose=not args.quieto, modelo=args.modelo)
+    except (RuntimeError, ValueError, FileNotFoundError) as erro:
+        print(f"Erro na geração SDD: {erro}", file=sys.stderr)
+        return 1
 
     print(f"\nPrograma gerado em: {pasta.resolve()}")
     print(f"Abra no navegador:  {entrada.as_uri()}")

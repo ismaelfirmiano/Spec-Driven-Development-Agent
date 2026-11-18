@@ -3,5 +3,7 @@ __pycache__/
 *.pyc
 .env
 output/
+natural_language/
+comparacoes/
 .DS_Store
 _to_delete/
