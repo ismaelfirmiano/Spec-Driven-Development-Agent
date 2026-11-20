@@ -4,6 +4,15 @@ Agente de IA que transforma especificações ou pedidos em linguagem natural
 em programas web (HTML/CSS/JS) prontos para abrir no navegador. Usa **CrewAI**
 para orquestrar agentes especializados e **Gemini** (Google Gen AI) como modelo.
 
+O projeto possui seis agentes especializados:
+
+- **Analista**: transforma especificações em planos técnicos SDD.
+- **Desenvolvedor**: implementa o plano em HTML, CSS e JavaScript.
+- **Revisor**: corrige e rastreia a implementação SDD.
+- **Interpretador**: cria protótipos simples por linguagem natural.
+- **Revisor Natural**: revisa o protótipo, deriva requisitos ENF/ERN e evidencia correções prioritárias.
+- **Avaliador**: avalia, corrige e compara os modos SDD e natural.
+
 ## Pipeline
 
 ```
@@ -30,18 +39,45 @@ No Ubuntu/Debian, se a criação do `.venv` falhar, instale o pacote venv
 
 Manual (qualquer sistema): `python3.13 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && cp .env.example .env`
 
-## Uso
+## Uso rápido
+
+SDD completo usando os três agentes originais:
 
 ```bash
 python main.py specs/exemplo_tarefas.md --abrir
 ```
 
-Se o modelo estiver sobrecarregado (erro 503), o agente espera e tenta de novo,
-e depois passa para os modelos de `SDD_MODELOS_RESERVA` no `.env`. Para ver os
-modelos que sua chave pode usar: `python main.py --modelos`. Para forçar um modelo
-só nesta execução: `python main.py specs/x.md -m gemini/<nome>`.
+Linguagem natural:
 
-Opções: `-o PASTA` (saída), `-m MODELO`, `-q` (sem log dos agentes), `--abrir` (abre no navegador).
+```bash
+python main.py specs/linguagem_natural.md --abrir
+python main.py --prompt "Crie uma lista de tarefas simples" --abrir
+```
+
+O SDD usa uma geração unificada das Fases 1–3 em uma única implementação,
+seguida apenas pela revisão final. Ao concluir, tanto o SDD quanto a linguagem
+natural abrem automaticamente o HTML gerado no navegador. Use `--sem-abrir`
+para desativar esse comportamento.
+
+Para gerar mais rápido e consumir menos contexto/tokens:
+
+```bash
+python main.py specs/exemplo_tarefas.md --rapido --sem-abrir
+python main.py --prompt "Crie uma lista de tarefas" --rapido --sem-abrir
+```
+
+O modo `--rapido` omite a revisão automática do SDD e da linguagem natural.
+A geração continua sendo gravada e pode ser auditada depois com `--avaliar`.
+
+O projeto usa a Gemini API com `gemini-3.8-flash` como principal e modelos Gemini
+mais leves como reserva. O modelo `antigravity-preview` foi listado pela API, mas não funciona
+com o CrewAI porque não oferece function calling, necessário para os arquivos
+estruturados. Se um modelo for incompatível ou indisponível, o agente tenta o
+próximo modelo de `SDD_MODELOS_RESERVA`. Veja os disponíveis com:
+
+```bash
+python main.py --modelos
+```
 
 ### Criar com linguagem natural
 

@@ -8,9 +8,11 @@ resultado de cada etapa já fica salvo em disco.
 from __future__ import annotations
 
 import os
+import posixpath
 import re
 import time
-from pathlib import Path
+from functools import lru_cache
+from pathlib import Path, PurePosixPath
 
 import yaml
 from crewai import LLM, Agent, Crew, Process, Task
@@ -18,9 +20,10 @@ from pydantic import BaseModel, Field
 
 CONFIG_DIR = Path(__file__).parent / "config"
 MODELO_PADRAO = "gemini/gemini-3.8-flash"
-RESERVA_PADRAO = "gemini/gemini-flash-latest,gemini/gemini-flash-lite-latest"
-ESPERAS_SEGUNDOS = (15, 45)  # pausas entre tentativas no mesmo modelo
-MAX_TOKENS_PADRAO = 32768    # espaço para o código completo na resposta
+RESERVA_PADRAO = "gemini/gemini-3.5-flash-lite,gemini/gemini-3.1-flash-lite"
+ESPERAS_SEGUNDOS = (1,)
+MAX_TOKENS_PADRAO = 8192
+MAX_ESPECIFICACAO_CHARS = 100_000
 
 
 # ---------------------------------------------------------------------------
@@ -40,6 +43,7 @@ class ProgramaGerado(BaseModel):
 # ---------------------------------------------------------------------------
 # Configuração
 # ---------------------------------------------------------------------------
+@lru_cache(maxsize=None)
 def _carregar_yaml(nome: str) -> dict:
     with open(CONFIG_DIR / nome, encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -61,20 +65,40 @@ def modelos_candidatos(modelo: str | None = None) -> list[str]:
 def criar_llm(modelo: str) -> LLM:
     if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
         raise RuntimeError("Defina GEMINI_API_KEY no arquivo .env")
-    max_tokens = int(os.getenv("SDD_MAX_TOKENS", MAX_TOKENS_PADRAO))
+    try:
+        max_tokens = int(os.getenv("SDD_MAX_TOKENS", MAX_TOKENS_PADRAO))
+    except ValueError as erro:
+        raise RuntimeError("SDD_MAX_TOKENS deve ser um número inteiro") from erro
+    if max_tokens < 1:
+        raise RuntimeError("SDD_MAX_TOKENS deve ser maior que zero")
     return LLM(model=modelo, temperature=0.2, max_tokens=max_tokens)
 
 
 def _tipo_erro(erro: Exception) -> str:
     """'transitorio' (vale repetir), 'modelo' (trocar de modelo) ou 'outro'."""
-    texto = str(erro)
+    texto = str(erro).lower()
+    modelos_incompativeis = (
+        "function calling is not enabled",
+        "function calling is not supported",
+        "tool calling is not supported",
+        "does not support function calling",
+        "model not found",
+        "model is not supported",
+        "unsupported model",
+    )
+    if any(t in texto for t in modelos_incompativeis):
+        return "modelo"
     transitorios = (
-        "503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "high demand", "overloaded",
-        "None or empty", "500", "INTERNAL", "timed out", "Timeout",
+        "503", "unavailable", "429", "resource_exhausted", "high demand", "overloaded",
+        "none or empty", "não retornou nenhum arquivo", "arquivos=[]", "500", "internal",
+        "timed out", "timeout",
+        "arquivo vazio", "arquivo duplicado", "arquivo de entrada inexistente",
+        "caminho inválido", "referência local inexistente", "conteúdo potencialmente inseguro",
+        "modelo não informou", "existe um arquivo sem caminho",
     )
     if any(t in texto for t in transitorios):
         return "transitorio"
-    if "404" in texto or "NOT_FOUND" in texto:
+    if "404" in texto or "not_found" in texto:
         return "modelo"
     return "outro"
 
@@ -91,23 +115,30 @@ def _rodar_etapa(nome: str, valores: dict[str, str], modelo: str | None, verbose
     for nome_modelo in modelos_candidatos(modelo):
         for tentativa in range(len(ESPERAS_SEGUNDOS) + 1):
             print(f"\n>> Etapa '{nome}' | modelo {nome_modelo} | tentativa {tentativa + 1}")
-            agente = Agent(
-                **cfg_agentes[cfg["agent"]],
-                llm=criar_llm(nome_modelo),
-                verbose=verbose,
-                allow_delegation=False,
-            )
-            tarefa = Task(
-                description=_preencher(cfg["description"], valores),
-                expected_output=cfg["expected_output"],
-                agent=agente,
-                output_pydantic=ProgramaGerado if estruturada else None,
-            )
-            crew = Crew(agents=[agente], tasks=[tarefa], process=Process.sequential, verbose=verbose)
             try:
+                agente = Agent(
+                    **cfg_agentes[cfg["agent"]],
+                    llm=criar_llm(nome_modelo),
+                    verbose=verbose,
+                    allow_delegation=False,
+                )
+                tarefa = Task(
+                    description=_preencher(cfg["description"], valores),
+                    expected_output=cfg["expected_output"],
+                    agent=agente,
+                    output_pydantic=ProgramaGerado if estruturada else None,
+                )
+                crew = Crew(
+                    agents=[agente],
+                    tasks=[tarefa],
+                    process=Process.sequential,
+                    verbose=verbose,
+                )
                 resultado = crew.kickoff()
                 if estruturada and resultado.pydantic is None:
-                    raise ValueError("None or empty: saída estruturada ausente")
+                    raise ValueError("O modelo não retornou nenhum arquivo")
+                if estruturada:
+                    _validar_programa(resultado.pydantic)
                 if not estruturada and not (resultado.raw or "").strip():
                     raise ValueError("None or empty: resposta vazia")
                 return resultado.pydantic if estruturada else resultado.raw
@@ -135,21 +166,101 @@ def _rodar_etapa(nome: str, valores: dict[str, str], modelo: str | None, verbose
 # Gravação
 # ---------------------------------------------------------------------------
 def _caminho_seguro(base: Path, relativo: str) -> Path:
-    """Impede que o modelo escreva fora da pasta de saída."""
-    destino = (base / relativo.lstrip("/\\")).resolve()
+    """Impede caminhos absolutos, vazios, em fora da pasta de saída."""
+    texto = relativo.strip().replace("\\", "/")
+    if not texto or texto.startswith("/"):
+        raise ValueError(f"Caminho inválido gerado pelo modelo: {relativo}")
+    destino = (base.resolve() / texto).resolve()
     if base.resolve() not in destino.parents and destino != base.resolve():
         raise ValueError(f"Caminho inválido gerado pelo modelo: {relativo}")
+    if destino.is_dir():
+        raise ValueError(f"Caminho esperado como arquivo: {relativo}")
     return destino
 
 
+def _escrever_texto_atomico(destino: Path, conteudo: str) -> None:
+    """Escreve o conteúdo via arquivo temporário e substituição final."""
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    temporario = destino.with_name(destino.name + ".tmp")
+    temporario.write_text(conteudo, encoding="utf-8")
+    temporario.replace(destino)
+
+
+def _validar_programa(programa: ProgramaGerado) -> None:
+    if not programa.arquivos:
+        raise ValueError("O modelo não retornou nenhum arquivo")
+    caminhos: set[str] = set()
+    entrada = (programa.entrada or "index.html").strip().replace("\\", "/")
+    if not entrada:
+        raise ValueError("O modelo não informou o arquivo de entrada")
+    for arquivo in programa.arquivos:
+        caminho = arquivo.caminho.strip().replace("\\", "/")
+        if not caminho:
+            raise ValueError("Existe um arquivo sem caminho")
+        if not arquivo.conteudo.strip():
+            raise ValueError(f"Arquivo vazio gerado pelo modelo: {caminho}")
+        if caminho in caminhos:
+            raise ValueError(f"Arquivo duplicado no resultado: {caminho}")
+        caminhos.add(caminho)
+    if entrada not in caminhos:
+        raise ValueError(f"Arquivo de entrada inexistente no resultado: {entrada}")
+
+    arquivos_por_caminho = {
+        arquivo.caminho.strip().replace("\\", "/"): arquivo.conteudo
+        for arquivo in programa.arquivos
+    }
+
+    # Valida referências locais antes da gravação. URLs externas e fragmentos
+    # internos não são arquivos locais.
+    for caminho, conteudo in arquivos_por_caminho.items():
+        if not caminho.lower().endswith(".html"):
+            continue
+        for atributo in re.findall(
+            r"""(?:src|href)\s*=\s*["']([^"']+)["']""",
+            conteudo,
+            flags=re.IGNORECASE,
+        ):
+            referencia = atributo.strip().split("#", 1)[0].split("?", 1)[0]
+            if not referencia or re.match(r"^(?:[a-z][a-z0-9+.-]*:|//)", referencia, re.IGNORECASE):
+                continue
+            if referencia.startswith("/"):
+                continue
+            diretorio = str(PurePosixPath(caminho).parent)
+            alvo = posixpath.normpath(posixpath.join(diretorio, referencia))
+            if alvo == ".":
+                alvo = ""
+            if alvo not in caminhos:
+                raise ValueError(
+                    f"Referência local inexistente no HTML {caminho}: {referencia}"
+                )
+
+    # Os agentes são instruídos a não inserir HTML no código a partir de dados
+    # dinâmicos. Essa proteção evita que um modelo retorne uma vulnerabilidade
+    # de XSS ainda que a revisão tenha sido superficial.
+    for caminho, conteudo in arquivos_por_caminho.items():
+        if not caminho.lower().endswith(".js"):
+            continue
+        if re.search(r"\.(?:innerHTML|outerHTML)\s*=", conteudo):
+            raise ValueError(
+                f"Conteúdo potencialmente inseguro gerado no arquivo {caminho}: uso de innerHTML/outerHTML"
+            )
+        if re.search(r"\bdocument\.(?:write|writeln)\s*\(", conteudo):
+            raise ValueError(
+                f"Conteúdo potencialmente inseguro gerado no arquivo {caminho}: uso de document.write"
+            )
+
+
 def gravar(programa: ProgramaGerado, pasta: Path, relatorio_sdd: bool = True) -> Path:
+    _validar_programa(programa)
     pasta.mkdir(parents=True, exist_ok=True)
     for arq in programa.arquivos:
         destino = _caminho_seguro(pasta, arq.caminho)
-        destino.parent.mkdir(parents=True, exist_ok=True)
-        destino.write_text(arq.conteudo, encoding="utf-8")
+        _escrever_texto_atomico(destino, arq.conteudo)
     if relatorio_sdd and programa.relatorio:
-        (pasta / "RELATORIO_RASTREABILIDADE.md").write_text(programa.relatorio, encoding="utf-8")
+        _escrever_texto_atomico(
+            pasta / "RELATORIO_RASTREABILIDADE.md",
+            programa.relatorio,
+        )
     return _caminho_seguro(pasta, programa.entrada or "index.html")
 
 
@@ -160,7 +271,7 @@ def _como_texto(programa: ProgramaGerado) -> str:
 def gerar_aplicacao_por_prompt(
     prompt: str, pasta_saida: Path, verbose: bool = True, modelo: str | None = None
 ) -> Path:
-    """Gera um protótipo direto a partir de linguagem natural, fora do pipeline SDD."""
+    """Gera um protótipo direto em uma única chamada ao modelo."""
     programa = _rodar_etapa("gerar_natural", {"PROMPT": prompt}, modelo, verbose)
     if not isinstance(programa, ProgramaGerado):
         raise RuntimeError("O agente não retornou os arquivos estruturados do protótipo.")
@@ -174,18 +285,33 @@ def gerar_aplicacao_por_prompt(
             "# Limitações e decisões do modo linguagem natural\n\n" + programa.relatorio,
             encoding="utf-8",
         )
+    if os.getenv("SDD_MODO_RAPIDO") == "1":
         rastreabilidade = (
             "# Rastreabilidade da linguagem natural\n\n"
-            "| Ponto solicitado | Implementação | Arquivo / linha | Status |\n"
-            "|---|---|---|---|\n"
-            "| Pedido original | Verificar no relatório abaixo | index.html, style.css, script.js | Ver tabela detalhada |\n\n"
-            "## Evidências e detalhes\n\n"
-            + programa.relatorio
+            "Revisão adicional omitida pelo modo rápido; use `--avaliar` "
+            "quando quiser uma auditoria técnica sob demanda.\n"
         )
-        (pasta_saida / "RASTREABILIDADE_NATURAL.md").write_text(
-            rastreabilidade,
-            encoding="utf-8",
-        )
+    else:
+        try:
+            revisao = _rodar_etapa(
+                "revisar_natural",
+                {"PROMPT": prompt, "CODIGO": _como_texto(programa)},
+                modelo,
+                verbose,
+            )
+            rastreabilidade = str(revisao).strip()
+        except (RuntimeError, ValueError) as erro:
+            rastreabilidade = (
+                "# Rastreabilidade da linguagem natural\n\n"
+                "A revisão natural não pôde ser concluída neste ambiente. "
+                f"Motivo registrado: {erro}\n"
+            )
+    (pasta_saida / "RASTREABILIDADE_NATURAL.md").write_text(
+        rastreabilidade
+        if rastreabilidade.lower().startswith("#")
+        else "# Rastreabilidade da linguagem natural\n\n" + rastreabilidade,
+        encoding="utf-8",
+    )
     return entrada
 
 
@@ -221,6 +347,8 @@ def _ler_documentos(base: Path) -> str:
     caminhos = [base] if base.is_file() else sorted(base.rglob("*"))
     extensoes = {".html", ".css", ".js", ".md", ".json", ".txt"}
     partes: list[str] = []
+    limite_total = 250_000
+    tamanho_total = 0
     for caminho in caminhos:
         if not caminho.is_file() or caminho.suffix.lower() not in extensoes:
             continue
@@ -231,8 +359,12 @@ def _ler_documentos(base: Path) -> str:
         except (UnicodeDecodeError, OSError):
             continue
         relativo = caminho.name if base.is_file() else caminho.relative_to(base).as_posix()
-        if len(conteudo) > 100_000:
-            conteudo = conteudo[:100_000] + "\n[... conteúdo truncado ...]"
+        resto = max(0, limite_total - tamanho_total)
+        if not resto:
+            break
+        if len(conteudo) > min(50_000, resto):
+            conteudo = conteudo[: min(50_000, resto)] + "\n[... conteúdo truncado ...]"
+        tamanho_total += len(conteudo)
         partes.append(f"--- ARQUIVO: {relativo} ---\n{conteudo}")
     if not partes:
         raise RuntimeError(f"Nenhum arquivo de código/documentação encontrado em {base}.")
@@ -349,10 +481,21 @@ def avaliar_codigo(
 
 # ---------------------------------------------------------------------------
 def gerar_aplicacao(
-    arquivo_spec: Path, pasta_saida: Path, verbose: bool = True, modelo: str | None = None
+    arquivo_spec: Path,
+    pasta_saida: Path,
+    verbose: bool = True,
+    modelo: str | None = None,
 ) -> Path:
-    """Lê a especificação, executa as três etapas e devolve o caminho do index.html."""
+    """Gera a aplicação completa em três etapas rápidas e consecutivas."""
+    if not arquivo_spec.is_file():
+        raise ValueError(f"Especificação não encontrada: {arquivo_spec}")
     spec = arquivo_spec.read_text(encoding="utf-8")
+    if not spec.strip():
+        raise ValueError("A especificação está vazia")
+    if len(spec) > MAX_ESPECIFICACAO_CHARS:
+        raise ValueError(
+            f"Especificação excede o limite de {MAX_ESPECIFICACAO_CHARS:,} caracteres"
+        )
     pasta_saida.mkdir(parents=True, exist_ok=True)
     valores = {"SPEC": spec, "ARQUIVO": arquivo_spec.name}
 
@@ -361,16 +504,24 @@ def gerar_aplicacao(
     (pasta_saida / "PLANO_TECNICO.md").write_text(plano, encoding="utf-8")
     valores["PLANO"] = plano
 
-    # 2) Implementação -> primeira versão do programa, já utilizável
+    # 2) Implementação completa em uma única passagem.
+    valores["FASE"] = "entrega completa unificada das Fases 1, 2 e 3"
     rascunho = _rodar_etapa("implementar", valores, modelo, verbose)
+    if not isinstance(rascunho, ProgramaGerado):
+        raise RuntimeError("O desenvolvedor não retornou arquivos estruturados")
     entrada = gravar(rascunho, pasta_saida)
-    print(f"\n>> Primeira versão salva em {pasta_saida}")
+    print(f"\n>> Aplicação completa salva em {pasta_saida}")
     valores["CODIGO"] = _como_texto(rascunho)
 
-    # 3) Revisão -> versão final (se falhar, fica a versão do desenvolvedor)
+    # 3) Revisão final. O modo rápido omite esta chamada e preserva o rascunho.
+    if os.getenv("SDD_MODO_RAPIDO") == "1":
+        return entrada
+
     try:
         final = _rodar_etapa("revisar", valores, modelo, verbose)
+        if not isinstance(final, ProgramaGerado):
+            raise RuntimeError("O revisor não retornou arquivos estruturados")
         entrada = gravar(final, pasta_saida)
-    except RuntimeError as erro:
+    except (RuntimeError, ValueError) as erro:
         print(f"\n>> AVISO: revisão não concluída ({erro}). Mantida a versão do desenvolvedor.")
     return entrada

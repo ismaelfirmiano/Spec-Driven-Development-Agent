@@ -4,5 +4,11 @@
   "code-runner.executorMap": {
     "python": "/home/matheus/Downloads/Spec-Driven-Development-Agent/.venv/bin/python -u"
   },
-  "code-runner.fileDirectoryAsCwd": true
+  "code-runner.fileDirectoryAsCwd": true,
+  "code-runner.runInTerminal": true,
+  "code-runner.saveFileBeforeRun": true,
+  "terminal.integrated.env.linux": {
+    "VIRTUAL_ENV": "/home/matheus/Downloads/Spec-Driven-Development-Agent/.venv",
+    "PATH": "/home/matheus/Downloads/Spec-Driven-Development-Agent/.venv/bin:${env:PATH}"
+  }
 }

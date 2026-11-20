@@ -4,6 +4,8 @@ Uso:
     python main.py specs/exemplo_tarefas.md            # gera em output/exemplo_tarefas/
     python main.py specs/minha_spec.md --abrir         # gera e abre no navegador
     python main.py specs/minha_spec.md -o saida/ -q    # pasta própria, sem logs
+    python main.py --spec specs/minha_spec.md --modo sdd
+    python main.py --spec specs/linguagem_natural.md --modo natural --abrir
     python main.py --prompt "Crie um gerenciador de tarefas web" # cria pela linguagem natural
     python main.py --avaliar                             # avalia e corrige a geração mais recente
     python main.py --avaliar output/exemplo_tarefas      # avalia uma pasta específica
@@ -11,6 +13,7 @@ Uso:
 """
 
 import argparse
+import os
 import sys
 import webbrowser
 from pathlib import Path
@@ -21,18 +24,31 @@ from dotenv import load_dotenv
 def main() -> int:
     load_dotenv()
 
-    parser = argparse.ArgumentParser(description="Gera um programa web a partir de uma especificação.")
+    parser = argparse.ArgumentParser(
+        description="Gera aplicações SDD ou por linguagem natural.",
+        epilog=(
+            "Uso rápido: python main.py specs/exemplo_tarefas.md --abrir | "
+            "python main.py --prompt \"Crie uma lista de tarefas\" --abrir"
+        ),
+    )
     parser.add_argument("spec", type=Path, nargs="?", help="Arquivo de especificação (.md ou .txt)")
-    parser.add_argument("-o", "--saida", type=Path, help="Pasta de saída (padrão: output/<nome-da-spec>)")
-    parser.add_argument("--abrir", action="store_true", help="Abre o resultado no navegador ao final")
+    parser.add_argument("--spec", dest="spec_opcao", type=Path, help="Arquivo de especificação (forma explícita)")
+    parser.add_argument("-o", "--saida", type=Path, help="Pasta de saída personalizada")
+    parser.add_argument("--abrir", action="store_true", help="Abre o resultado no navegador ao final (padrão)")
+    parser.add_argument("--sem-abrir", action="store_true", help="Não abre o navegador ao concluir")
     parser.add_argument("-q", "--quieto", action="store_true", help="Oculta o log detalhado dos agentes")
     parser.add_argument("-m", "--modelo", help="Modelo a usar nesta execução (ex.: gemini/gemini-3.8-flash)")
     parser.add_argument("--prompt", help="Cria o programa a partir de um pedido em linguagem natural")
+    parser.add_argument("--modo", choices=("sdd", "natural", "auto"), default="auto", help="Tipo de execução ao usar --spec ou spec posicional")
     parser.add_argument("--avaliar", nargs="?", const="auto", metavar="CAMINHO", help="Avalia e corrige o último código SDD/natural ou uma pasta/arquivo informado")
     parser.add_argument("--comparar", nargs=2, metavar=("SDD", "NATURAL"), help="Compara uma geração SDD com uma geração em linguagem natural")
     parser.add_argument("--tipo-avaliacao", choices=("auto", "sdd", "natural"), default="auto", help="Tipo da avaliação: automático, SDD ou linguagem natural")
+    parser.add_argument("--rapido", action="store_true", help="Modo leve: menos chamadas e menos revisão automática")
     parser.add_argument("--modelos", action="store_true", help="Lista os modelos Gemini disponíveis para sua chave")
     args = parser.parse_args()
+
+    if args.rapido:
+        os.environ["SDD_MODO_RAPIDO"] = "1"
 
     if args.modelos:
         return listar_modelos()
@@ -73,7 +89,7 @@ def main() -> int:
         return 0
 
     if args.prompt:
-        if args.spec:
+        if args.spec or args.spec_opcao:
             parser.error("não use spec e --prompt ao mesmo tempo")
         import re
         slug = re.sub(r"[^a-z0-9]+", "_", args.prompt.lower()).strip("_")[:50] or "prompt"
@@ -87,26 +103,59 @@ def main() -> int:
             return 1
         print(f"\nPrograma gerado em: {pasta.resolve()}")
         print(f"Abra no navegador:  {entrada.as_uri()}")
-        if args.abrir:
+        if not args.sem_abrir:
             webbrowser.open(entrada.as_uri())
         return 0
 
-    if args.spec is None:
+    arquivo_spec = args.spec_opcao or args.spec
+    if args.spec_opcao and args.spec:
+        parser.error("use o caminho posicional ou --spec, não os dois")
+    if arquivo_spec is None:
         parser.error("informe o arquivo de especificação ou use --prompt")
-    if not args.spec.is_file():
-        print(f"Especificação não encontrada: {args.spec}", file=sys.stderr)
+    if not arquivo_spec.is_file():
+        print(f"Especificação não encontrada: {arquivo_spec}", file=sys.stderr)
         return 1
 
-    pasta = args.saida or Path("output") / args.spec.stem
+    import re
+    slug = re.sub(r"[^a-z0-9]+", "_", arquivo_spec.stem.lower()).strip("_") or "projeto"
+    modo = args.modo
+    if modo == "auto":
+        modo = "natural" if "linguagem_natural" in arquivo_spec.stem.lower() else "sdd"
+
+    if modo == "natural":
+        pasta = args.saida or Path("natural_language") / slug
+        try:
+            pedido = arquivo_spec.read_text(encoding="utf-8")
+            entrada = gerar_aplicacao_por_prompt(
+                pedido,
+                pasta,
+                verbose=not args.quieto,
+                modelo=args.modelo,
+            )
+        except (RuntimeError, ValueError, FileNotFoundError) as erro:
+            print(f"Erro na geração natural: {erro}", file=sys.stderr)
+            return 1
+        print(f"\nPrograma gerado em: {pasta.resolve()}")
+        print(f"Abra no navegador:  {entrada.as_uri()}")
+        if not args.sem_abrir:
+            webbrowser.open(entrada.as_uri())
+        return 0
+
+    pasta = args.saida or Path("output") / arquivo_spec.stem
     try:
-        entrada = gerar_aplicacao(args.spec, pasta, verbose=not args.quieto, modelo=args.modelo)
+        entrada = gerar_aplicacao(
+            arquivo_spec,
+            pasta,
+            verbose=not args.quieto,
+            modelo=args.modelo,
+        )
     except (RuntimeError, ValueError, FileNotFoundError) as erro:
         print(f"Erro na geração SDD: {erro}", file=sys.stderr)
         return 1
 
     print(f"\nPrograma gerado em: {pasta.resolve()}")
     print(f"Abra no navegador:  {entrada.as_uri()}")
-    if args.abrir:
+    if not args.sem_abrir:
         webbrowser.open(entrada.as_uri())
     return 0
 
