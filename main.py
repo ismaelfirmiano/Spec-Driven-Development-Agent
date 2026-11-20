@@ -16,9 +16,59 @@ import argparse
 import os
 import sys
 import webbrowser
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+
+def detectar_modo_spec(arquivo_spec: Path) -> str:
+    """Detecta SDD ou linguagem natural pelo conteúdo e pelo nome do arquivo."""
+    texto = arquivo_spec.read_text(encoding="utf-8")
+    texto_limpo = texto.lower()
+    nome = arquivo_spec.stem.lower()
+
+    marcadores_sdd = (
+        "(sdd)",
+        "spec-driven",
+        "requisitos funcionais",
+        "requisitos não-funcionais",
+        "regras de negócio",
+        "critérios de aceitação",
+        "fora do escopo",
+        "matriz de rastreabilidade",
+        "checklist de entrega",
+        "modelo de dados",
+        "arquitetura",
+        "especificação técnica",
+    )
+    marcadores_natural = (
+        "pedido em linguagem natural",
+        "crie ",
+        "gere ",
+        "faça ",
+        "desenvolva uma ",
+        "desenvolva o ",
+        "construa ",
+        "implemente ",
+    )
+
+    pontos_sdd = sum(
+        2 if marcador in texto_limpo else 0
+        for marcador in marcadores_sdd
+    )
+    pontos_sdd += len(re.findall(r"\brf[- ]?\d+\b|\brnf[- ]?\d+\b", texto_limpo)) * 2
+    pontos_natural = sum(
+        2 if marcador in texto_limpo else 0
+        for marcador in marcadores_natural
+    )
+
+    if "linguagem_natural" in nome or nome.startswith("natural"):
+        pontos_natural += 1
+    if "sdd" in nome or "spec" in nome:
+        pontos_sdd += 1
+
+    return "natural" if pontos_natural > pontos_sdd else "sdd"
 
 
 def main() -> int:
@@ -91,7 +141,6 @@ def main() -> int:
     if args.prompt:
         if args.spec or args.spec_opcao:
             parser.error("não use spec e --prompt ao mesmo tempo")
-        import re
         slug = re.sub(r"[^a-z0-9]+", "_", args.prompt.lower()).strip("_")[:50] or "prompt"
         pasta = args.saida or Path("natural_language") / slug
         try:
@@ -116,11 +165,11 @@ def main() -> int:
         print(f"Especificação não encontrada: {arquivo_spec}", file=sys.stderr)
         return 1
 
-    import re
     slug = re.sub(r"[^a-z0-9]+", "_", arquivo_spec.stem.lower()).strip("_") or "projeto"
     modo = args.modo
     if modo == "auto":
-        modo = "natural" if "linguagem_natural" in arquivo_spec.stem.lower() else "sdd"
+        modo = detectar_modo_spec(arquivo_spec)
+        print(f"Modo detectado automaticamente: {modo.upper()}")
 
     if modo == "natural":
         pasta = args.saida or Path("natural_language") / slug

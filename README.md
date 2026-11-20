@@ -54,6 +54,14 @@ python main.py specs/linguagem_natural.md --abrir
 python main.py --prompt "Crie uma lista de tarefas simples" --abrir
 ```
 
+Com um arquivo Markdown, `--modo auto` analisa o conteúdo e escolhe entre SDD
+e linguagem natural automaticamente. Você também pode definir manualmente:
+
+```bash
+python main.py specs/exemplo_tarefas.md --modo sdd --abrir
+python main.py specs/meu_pedido.md --modo natural --abrir
+```
+
 O SDD usa uma geração unificada das Fases 1–3 em uma única implementação,
 seguida apenas pela revisão final. Ao concluir, tanto o SDD quanto a linguagem
 natural abrem automaticamente o HTML gerado no navegador. Use `--sem-abrir`
