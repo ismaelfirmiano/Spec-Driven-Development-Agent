@@ -14,9 +14,9 @@ Uso:
 
 import argparse
 import os
+import re
 import sys
 import webbrowser
-import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -24,9 +24,12 @@ from dotenv import load_dotenv
 
 def detectar_modo_spec(arquivo_spec: Path) -> str:
     """Detecta SDD ou linguagem natural pelo conteúdo e pelo nome do arquivo."""
+    nome = arquivo_spec.stem.lower()
+    if "linguagem_natural" in nome or nome.startswith("natural"):
+        return "natural"
+
     texto = arquivo_spec.read_text(encoding="utf-8")
     texto_limpo = texto.lower()
-    nome = arquivo_spec.stem.lower()
 
     marcadores_sdd = (
         "(sdd)",
@@ -53,18 +56,10 @@ def detectar_modo_spec(arquivo_spec: Path) -> str:
         "implemente ",
     )
 
-    pontos_sdd = sum(
-        2 if marcador in texto_limpo else 0
-        for marcador in marcadores_sdd
-    )
+    pontos_sdd = sum(2 for marcador in marcadores_sdd if marcador in texto_limpo)
     pontos_sdd += len(re.findall(r"\brf[- ]?\d+\b|\brnf[- ]?\d+\b", texto_limpo)) * 2
-    pontos_natural = sum(
-        2 if marcador in texto_limpo else 0
-        for marcador in marcadores_natural
-    )
+    pontos_natural = sum(2 for marcador in marcadores_natural if marcador in texto_limpo)
 
-    if "linguagem_natural" in nome or nome.startswith("natural"):
-        pontos_natural += 1
     if "sdd" in nome or "spec" in nome:
         pontos_sdd += 1
 

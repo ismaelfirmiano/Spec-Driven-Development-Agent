@@ -40,6 +40,10 @@ class ProgramaGerado(BaseModel):
     relatorio: str = Field(default="", description="Rastreabilidade requisito -> código, em Markdown")
 
 
+class RelatorioGerado(BaseModel):
+    relatorio: str = Field(description="Relatório comparativo em Markdown")
+
+
 # ---------------------------------------------------------------------------
 # Configuração
 # ---------------------------------------------------------------------------
@@ -109,7 +113,14 @@ def _tipo_erro(erro: Exception) -> str:
 def _rodar_etapa(nome: str, valores: dict[str, str], modelo: str | None, verbose: bool):
     cfg_agentes = _carregar_yaml("agents.yaml")
     cfg = _carregar_yaml("tasks.yaml")[nome]
-    estruturada = nome in ("implementar", "revisar", "gerar_natural", "avaliar", "comparar")
+    modelos_saida = {
+        "implementar": ProgramaGerado,
+        "revisar": ProgramaGerado,
+        "gerar_natural": ProgramaGerado,
+        "avaliar": ProgramaGerado,
+        "comparar": RelatorioGerado,
+    }
+    modelo_saida = modelos_saida.get(nome)
 
     ultimo_erro: Exception | None = None
     for nome_modelo in modelos_candidatos(modelo):
@@ -126,7 +137,7 @@ def _rodar_etapa(nome: str, valores: dict[str, str], modelo: str | None, verbose
                     description=_preencher(cfg["description"], valores),
                     expected_output=cfg["expected_output"],
                     agent=agente,
-                    output_pydantic=ProgramaGerado if estruturada else None,
+                    output_pydantic=modelo_saida,
                 )
                 crew = Crew(
                     agents=[agente],
@@ -135,13 +146,15 @@ def _rodar_etapa(nome: str, valores: dict[str, str], modelo: str | None, verbose
                     verbose=verbose,
                 )
                 resultado = crew.kickoff()
-                if estruturada and resultado.pydantic is None:
-                    raise ValueError("O modelo não retornou nenhum arquivo")
-                if estruturada:
+                if modelo_saida is not None and resultado.pydantic is None:
+                    raise ValueError("O modelo não retornou a saída estruturada esperada")
+                if isinstance(resultado.pydantic, ProgramaGerado):
                     _validar_programa(resultado.pydantic)
-                if not estruturada and not (resultado.raw or "").strip():
+                elif isinstance(resultado.pydantic, RelatorioGerado) and not resultado.pydantic.relatorio.strip():
+                    raise ValueError("O modelo retornou um relatório comparativo vazio")
+                if modelo_saida is None and not (resultado.raw or "").strip():
                     raise ValueError("None or empty: resposta vazia")
-                return resultado.pydantic if estruturada else resultado.raw
+                return resultado.pydantic if modelo_saida is not None else resultado.raw
             except Exception as erro:  # noqa: BLE001 - classificado abaixo
                 ultimo_erro = erro
                 tipo = _tipo_erro(erro)
@@ -268,10 +281,28 @@ def _como_texto(programa: ProgramaGerado) -> str:
     return "\n\n".join(f"--- ARQUIVO: {a.caminho} ---\n{a.conteudo}" for a in programa.arquivos)
 
 
+def _codigo_com_linhas(programa: ProgramaGerado) -> str:
+    """Formata arquivos com linhas numeradas para evidências da revisão natural."""
+    arquivos = []
+    for arquivo in programa.arquivos:
+        linhas = "\n".join(
+            f"{numero:4} | {linha}"
+            for numero, linha in enumerate(arquivo.conteudo.splitlines(), start=1)
+        )
+        arquivos.append(f"--- ARQUIVO: {arquivo.caminho} ---\n{linhas}")
+    return "\n\n".join(arquivos)
+
+
 def gerar_aplicacao_por_prompt(
     prompt: str, pasta_saida: Path, verbose: bool = True, modelo: str | None = None
 ) -> Path:
     """Gera um protótipo direto em uma única chamada ao modelo."""
+    if not prompt.strip():
+        raise ValueError("O pedido em linguagem natural está vazio")
+    if len(prompt) > MAX_ESPECIFICACAO_CHARS:
+        raise ValueError(
+            f"O pedido excede o limite de {MAX_ESPECIFICACAO_CHARS:,} caracteres"
+        )
     programa = _rodar_etapa("gerar_natural", {"PROMPT": prompt}, modelo, verbose)
     if not isinstance(programa, ProgramaGerado):
         raise RuntimeError("O agente não retornou os arquivos estruturados do protótipo.")
@@ -295,7 +326,7 @@ def gerar_aplicacao_por_prompt(
         try:
             revisao = _rodar_etapa(
                 "revisar_natural",
-                {"PROMPT": prompt, "CODIGO": _como_texto(programa)},
+                {"PROMPT": prompt, "CODIGO": _codigo_com_linhas(programa)},
                 modelo,
                 verbose,
             )
@@ -347,6 +378,7 @@ def _ler_documentos(base: Path) -> str:
     caminhos = [base] if base.is_file() else sorted(base.rglob("*"))
     extensoes = {".html", ".css", ".js", ".md", ".json", ".txt"}
     partes: list[str] = []
+    arquivos_ignorados: list[str] = []
     limite_total = 250_000
     tamanho_total = 0
     for caminho in caminhos:
@@ -356,18 +388,34 @@ def _ler_documentos(base: Path) -> str:
             continue
         try:
             conteudo = caminho.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
+        except UnicodeDecodeError:
+            arquivos_ignorados.append(f"{caminho}: codificação diferente de UTF-8")
+            continue
+        except OSError as erro:
+            arquivos_ignorados.append(f"{caminho}: {erro}")
             continue
         relativo = caminho.name if base.is_file() else caminho.relative_to(base).as_posix()
-        resto = max(0, limite_total - tamanho_total)
-        if not resto:
+        espaco = limite_total - tamanho_total
+        if espaco <= 0:
+            arquivos_ignorados.append(f"{relativo}: limite total de leitura excedido")
             break
-        if len(conteudo) > min(50_000, resto):
-            conteudo = conteudo[: min(50_000, resto)] + "\n[... conteúdo truncado ...]"
+        limite_arquivo = min(50_000, espaco)
+        if len(conteudo) > limite_arquivo:
+            marcador = "\n[... conteúdo truncado ...]"
+            if limite_arquivo > len(marcador):
+                conteudo = conteudo[: limite_arquivo - len(marcador)] + marcador
+            else:
+                conteudo = conteudo[:limite_arquivo]
+            arquivos_ignorados.append(f"{relativo}: conteúdo truncado pelo limite de leitura")
         tamanho_total += len(conteudo)
         partes.append(f"--- ARQUIVO: {relativo} ---\n{conteudo}")
     if not partes:
         raise RuntimeError(f"Nenhum arquivo de código/documentação encontrado em {base}.")
+    if arquivos_ignorados:
+        partes.append(
+            "--- AVISO: arquivos total ou parcialmente ignorados ---\n"
+            + "\n".join(f"- {item}" for item in arquivos_ignorados)
+        )
     return "\n\n".join(partes)
 
 
@@ -391,14 +439,14 @@ def comparar_codigo(
         modelo,
         verbose,
     )
-    if not isinstance(resultado, ProgramaGerado):
+    if not isinstance(resultado, RelatorioGerado):
         raise RuntimeError("O avaliador comparativo não retornou um relatório estruturado.")
 
     nome_sdd = sdd.name if sdd.is_dir() else sdd.stem
     nome_natural = natural.name if natural.is_dir() else natural.stem
     destino = Path("comparacoes") / f"{nome_sdd}_vs_{nome_natural}"
     destino.mkdir(parents=True, exist_ok=True)
-    relatorio = resultado.relatorio or "# Relatório comparativo\n\nNenhuma divergência textualmente registrada."
+    relatorio = resultado.relatorio
     relatorio = f"# Comparação — SDD vs Linguagem Natural\n\n{relatorio.lstrip('#').lstrip()}"
     (destino / "RELATORIO_COMPARATIVO.md").write_text(relatorio, encoding="utf-8")
 
@@ -454,9 +502,21 @@ def avaliar_codigo(
     destino.mkdir(parents=True, exist_ok=True)
     if base.is_dir():
         gravar(programa_corrigido, destino, relatorio_sdd=False)
-    elif base.is_file() and programa_corrigido.arquivos:
-        arquivo_corrigido = programa_corrigido.arquivos[0]
-        base.write_text(arquivo_corrigido.conteudo, encoding="utf-8")
+    elif base.is_file():
+        correspondentes = [
+            arquivo
+            for arquivo in programa_corrigido.arquivos
+            if PurePosixPath(arquivo.caminho.replace("\\", "/")).name == base.name
+        ]
+        if len(correspondentes) == 1:
+            arquivo_corrigido = correspondentes[0]
+        elif len(programa_corrigido.arquivos) == 1:
+            arquivo_corrigido = programa_corrigido.arquivos[0]
+        else:
+            raise RuntimeError(
+                f"A avaliação retornou vários arquivos sem identificar qual corresponde a {base.name}."
+            )
+        _escrever_texto_atomico(base, arquivo_corrigido.conteudo)
 
     relatorio = programa_corrigido.relatorio or "A avaliação não produziu achados textuais."
     arquivo = destino / "RELATORIO_AVALIACAO.md"

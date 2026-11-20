@@ -98,6 +98,10 @@ python main.py --prompt "Crie um gerenciador de tarefas responsivo com prioridad
 O modo não usa o pipeline SDD padrão. A saída fica separada em
 `natural_language/<nome-do-prompt>/`, com o site em `index.html` e decisões em
 `LIMITACOES.md`, `PEDIDO_NATURAL.md` e `RASTREABILIDADE_NATURAL.md`.
+O interpretador prioriza os comportamentos pedidos e evita acrescentar recursos
+sem solicitação. Em seguida, o revisor confere estaticamente a implementação e
+gera uma rastreabilidade com referências a arquivo e linha; ele não altera o
+código nem afirma que executou testes.
 
 ### Avaliar o código
 
