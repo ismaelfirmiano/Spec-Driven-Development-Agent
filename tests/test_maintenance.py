@@ -68,6 +68,30 @@ class NaturalLanguageTests(unittest.TestCase):
                 gerar_aplicacao_por_prompt("  \n", Path("saida"), verbose=False)
         rodar_etapa.assert_not_called()
 
+    def test_markdown_file_is_read_for_generation_and_review(self):
+        with tempfile.TemporaryDirectory() as diretorio:
+            pedido = Path(diretorio) / "pedido.md"
+            pedido.write_text("# Pedido\nCrie um contador simples.", encoding="utf-8")
+            saida = Path(diretorio) / "saida"
+            saida.mkdir()
+            programa = ProgramaGerado(
+                arquivos=[ArquivoGerado(caminho="index.html", conteudo="<main>0</main>")],
+            )
+            with (
+                patch(
+                    "sdd_agent.crew._rodar_etapa",
+                    side_effect=[programa, "# Revisão\n\nAtendido."],
+                ) as rodar_etapa,
+                patch("sdd_agent.crew.gravar", return_value=saida / "index.html"),
+            ):
+                gerar_aplicacao_por_prompt(pedido, saida, verbose=False)
+
+        chamadas = rodar_etapa.call_args_list
+        prompt_geracao = chamadas[0].args[1]["PROMPT"]
+        prompt_revisao = chamadas[1].args[1]["PROMPT"]
+        self.assertIn("# Pedido", prompt_geracao)
+        self.assertIn("Crie um contador simples.", prompt_revisao)
+
     def test_review_code_includes_exact_line_numbers(self):
         programa = ProgramaGerado(
             arquivos=[

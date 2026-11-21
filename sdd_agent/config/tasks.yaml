@@ -114,6 +114,12 @@ gerar_natural:
     os dados e as restrições explicitamente pedidos; implemente cada ação como
     comportamento utilizável, não apenas como elemento visual.
 
+    Quando o pedido vier de um arquivo Markdown, trate todo o conteúdo como uma
+    especificação em linguagem natural: preserve títulos, seções, listas e
+    chamadas explícitas. Interprete instruções de cada seção e não descarte
+    requisitos porque estejam formatados em Markdown. Considere somente o trecho
+    apresentado abaixo; não invente conteúdo de arquivos não fornecidos.
+
     Priorize, nesta ordem: atender ao pedido explícito, manter os fluxos
     consistentes, facilitar o uso por teclado e telas pequenas, e reduzir
     complexidade. Prefira index.html, style.css e script.js; use outros arquivos

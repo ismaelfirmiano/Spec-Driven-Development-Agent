@@ -169,9 +169,8 @@ def main() -> int:
     if modo == "natural":
         pasta = args.saida or Path("natural_language") / slug
         try:
-            pedido = arquivo_spec.read_text(encoding="utf-8")
             entrada = gerar_aplicacao_por_prompt(
-                pedido,
+                arquivo_spec,
                 pasta,
                 verbose=not args.quieto,
                 modelo=args.modelo,

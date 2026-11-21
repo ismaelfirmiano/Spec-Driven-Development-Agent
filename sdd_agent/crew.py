@@ -294,21 +294,47 @@ def _codigo_com_linhas(programa: ProgramaGerado) -> str:
 
 
 def gerar_aplicacao_por_prompt(
-    prompt: str, pasta_saida: Path, verbose: bool = True, modelo: str | None = None
+    prompt: str | Path, pasta_saida: Path, verbose: bool = True, modelo: str | None = None
 ) -> Path:
-    """Gera um protótipo direto em uma única chamada ao modelo."""
-    if not prompt.strip():
+    """Gera um protótipo direto a partir de texto ou de um arquivo Markdown."""
+    if isinstance(prompt, Path):
+        if not prompt.is_file():
+            raise FileNotFoundError(f"Pedido em Markdown não encontrado: {prompt}")
+        try:
+            pedido = prompt.read_text(encoding="utf-8")
+        except UnicodeDecodeError as erro:
+            raise ValueError(
+                f"O arquivo {prompt} não está em codificação UTF-8."
+            ) from erro
+    else:
+        candidato = Path(prompt)
+        if candidato.suffix.lower() == ".md" and candidato.is_file():
+            try:
+                pedido = candidato.read_text(encoding="utf-8")
+            except UnicodeDecodeError as erro:
+                raise ValueError(
+                    f"O arquivo {candidato} não está em codificação UTF-8."
+                ) from erro
+        else:
+            pedido = prompt
+
+    if not pedido.strip():
         raise ValueError("O pedido em linguagem natural está vazio")
-    if len(prompt) > MAX_ESPECIFICACAO_CHARS:
+    if len(pedido) > MAX_ESPECIFICACAO_CHARS:
         raise ValueError(
             f"O pedido excede o limite de {MAX_ESPECIFICACAO_CHARS:,} caracteres"
         )
-    programa = _rodar_etapa("gerar_natural", {"PROMPT": prompt}, modelo, verbose)
+    programa = _rodar_etapa(
+        "gerar_natural",
+        {"PROMPT": pedido},
+        modelo,
+        verbose,
+    )
     if not isinstance(programa, ProgramaGerado):
         raise RuntimeError("O agente não retornou os arquivos estruturados do protótipo.")
     entrada = gravar(programa, pasta_saida, relatorio_sdd=False)
     (pasta_saida / "PEDIDO_NATURAL.md").write_text(
-        "# Pedido em linguagem natural\n\n" + prompt,
+        "# Pedido em linguagem natural\n\n" + pedido,
         encoding="utf-8",
     )
     if programa.relatorio:
@@ -326,7 +352,7 @@ def gerar_aplicacao_por_prompt(
         try:
             revisao = _rodar_etapa(
                 "revisar_natural",
-                {"PROMPT": prompt, "CODIGO": _codigo_com_linhas(programa)},
+                {"PROMPT": pedido, "CODIGO": _codigo_com_linhas(programa)},
                 modelo,
                 verbose,
             )
