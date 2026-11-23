@@ -3,6 +3,7 @@
 
 # Orquestração multiagente + integração nativa com Gemini
 crewai[google-genai]>=1.0.0
+litellm>=1.0.0
 
 # SDK oficial do Google Gen AI (também puxado pelo extra acima; explícito aqui)
 google-genai>=1.0.0

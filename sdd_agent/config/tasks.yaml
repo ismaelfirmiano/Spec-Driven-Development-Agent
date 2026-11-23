@@ -5,34 +5,64 @@
 analisar:
   agent: analista
   description: >
-    Leia a especificação abaixo e produza um plano técnico.
+    Analise a especificação como fonte da verdade e produza um plano conciso,
+    completo e priorizado. Não implemente nem acrescente requisitos.
 
-    1. Liste cada requisito funcional como RF-01, RF-02, ... e cada requisito
-       não funcional como RNF-01, ... Se a spec já tiver IDs, preserve-os.
-    2. Para cada requisito, escreva um critério de aceitação verificável.
-    3. Descreva a estrutura de arquivos (por padrão index.html, style.css e
-       script.js), o modelo de dados e os componentes de interface.
-    4. Liste ambiguidades e a decisão mínima adotada para cada uma.
+    1. Identifique todos os requisitos verificáveis, agrupe apenas duplicatas e
+       preserve os IDs fornecidos. Crie IDs RF-01, RF-02... somente para requisitos
+       sem identificador; não limite a lista aos cinco primeiros.
+    2. Para cada requisito, registre prioridade e um critério de aceitação observável.
+    3. Resuma os dados, fluxos e componentes diretamente necessários aos requisitos.
+    4. Proponha uma estrutura de arquivos pequena e compatível com as restrições
+       explícitas da especificação.
+    5. Separe ambiguidades, conflitos e decisões mínimas; não trate decisões como
+       requisitos confirmados.
 
     ===== ESPECIFICAÇÃO ([[ARQUIVO]]) =====
     [[SPEC]]
     ===== FIM DA ESPECIFICAÇÃO =====
   expected_output: >
-    Plano técnico em Markdown com: tabela de requisitos (ID, descrição,
-    critério de aceitação), estrutura de arquivos, modelo de dados,
-    componentes de UI e ambiguidades resolvidas.
+    Plano Markdown conciso com requisitos (ID, prioridade, descrição, critério),
+    dados e fluxos necessários, estrutura de arquivos, ambiguidades/conflitos e
+    decisões mínimas claramente identificadas.
 
 implementar:
   agent: desenvolvedor
   description: >
-    Implemente a aplicação completa seguindo o plano técnico abaixo.
+    Implemente a entrega completa em uma única resposta, seguindo a especificação
+    original e o plano. A especificação prevalece em caso de conflito; assinale
+    ambiguidades no relatório em vez de inventar comportamento.
+
+    ===== FASE SELECIONADA =====
+    [[FASE]]
+    ===== FIM DA FASE =====
 
     Regras:
+    - Cubra todos os critérios da especificação. Priorize uma implementação simples,
+      mas não descarte requisitos por não estarem entre os mais importantes.
+    - Não adicione funcionalidades nem dados que não foram pedidos.
+    - Nunca altere outro arquivo da especificação original.
     - Deve abrir com duplo clique em index.html (protocolo file://): nada de
       módulos ES, fetch de arquivos locais, build ou servidor.
-    - Apenas HTML, CSS e JavaScript puro; bibliotecas externas só se a spec
+    - Use apenas HTML, CSS e JavaScript puro; bibliotecas externas só se a spec
       pedir, e então via CDN.
-    - Comente no código o ID do requisito implementado (ex.: // RF-03).
+    - Se a especificação pedir arquitetura modular, entregue todos os arquivos
+      previstos e referencie-os corretamente no HTML. Scripts clássicos devem
+      ser carregados na ordem de dependência; não use imports, exports ou módulos
+      ES, para preservar a abertura por file://.
+    - Antes de responder, revise cada bloco JavaScript por erros de sintaxe.
+      Em particular, dentro de `switch`, use `case`/`default` antes de instruções;
+      não coloque `if` ou outras instruções entre a abertura do switch e o primeiro case.
+    - Confirme que cada caminho usado em `src` e `href` existe na lista de arquivos
+      devolvida, e que o ponto de entrada referencia arquivos com os mesmos nomes.
+    - Não use `innerHTML`, `outerHTML` ou `document.write` com dados dinâmicos.
+      Use `textContent` e APIs DOM seguras para qualquer conteúdo de usuário.
+    - Use comentários com IDs somente onde ajudarem a localizar a implementação;
+      não polua cada linha com rastreabilidade redundante.
+    - Implemente persistência e validações quando exigidas e mantenha estados de
+      sucesso/erro coerentes com a operação real.
+    - Entregue todos os arquivos completos. Use index.html, style.css e script.js
+      como base apenas quando a especificação não pedir outra estrutura.
     - Código completo, sem "TODO" nem trechos omitidos.
     - No campo relatorio, liste brevemente onde cada requisito foi implementado.
 
@@ -46,12 +76,23 @@ implementar:
 revisar:
   agent: revisor
   description: >
-    Revise o código abaixo contra o plano técnico e a especificação original.
+    Faça revisão independente da implementação completa contra a especificação e
+    o plano. Preserve comportamento correto, corrija somente defeitos verificáveis
+    e evite reescrever arquivos sem necessidade.
 
-    1. Para cada requisito, diga se foi atendido e onde no código.
-    2. Corrija bugs e requisitos faltantes diretamente no código.
-    3. Devolva a versão FINAL e COMPLETA de todos os arquivos, mais um
-       relatório de rastreabilidade em Markdown.
+    - Verifique primeiro ponto de entrada, integridade dos arquivos, sintaxe aparente,
+      ordem dos scripts, referências locais e compatibilidade com as restrições de
+      execução da especificação.
+    - Confronte cada critério com evidência concreta. Registre status e lacunas;
+      não deduza funcionamento pelo nome de arquivo, função ou comentário.
+    - Priorize bloqueadores e erros de alto impacto, depois regressões e critérios
+      incompletos. Corrija problemas confirmados sem alterar requisitos ou UX válida.
+    - Trate inserção insegura de dados dinâmicos como problema de segurança e use
+      APIs DOM seguras na correção.
+    - Separe inspeção estática, testes com evidência fornecida e testes não
+      executados. Não invente resultados ou execução no navegador.
+    - Devolva todos os arquivos finais completos exigidos pelo contrato e liste
+      correções, evidências e lacunas restantes.
 
     ===== ESPECIFICAÇÃO ORIGINAL =====
     [[SPEC]]
@@ -65,23 +106,168 @@ revisar:
     completo), o arquivo de entrada (index.html) e o relatório de
     rastreabilidade requisito -> código -> status.
 
-corrigir:
-  agent: desenvolvedor
+gerar_natural:
+  agent: interpretador
   description: >
-    O programa abaixo foi testado automaticamente em um navegador e FALHOU.
-    Corrija TODOS os problemas listados, sem remover funcionalidades e sem
-    alterar o que já funciona. Erros de sintaxe impedem o script inteiro de
-    rodar, então revise o arquivo com cuidado. Devolva todos os arquivos
-    completos.
+    Converta o pedido em uma aplicação web funcional, diretamente e sem etapas
+    intermediárias visíveis. Antes de escrever os arquivos, identifique as ações,
+    os dados e as restrições explicitamente pedidos; implemente cada ação como
+    comportamento utilizável, não apenas como elemento visual.
 
-    ===== PROBLEMAS ENCONTRADOS PELO TESTE AUTOMÁTICO =====
-    [[PROBLEMAS]]
-    ===== PLANO TÉCNICO =====
-    [[PLANO]]
-    ===== CÓDIGO ATUAL =====
+    Quando o pedido vier de um arquivo Markdown, trate todo o conteúdo como uma
+    especificação em linguagem natural: preserve títulos, seções, listas e
+    chamadas explícitas. Interprete instruções de cada seção e não descarte
+    requisitos porque estejam formatados em Markdown. Considere somente o trecho
+    apresentado abaixo; não invente conteúdo de arquivos não fornecidos.
+
+    Priorize, nesta ordem: atender ao pedido explícito, manter os fluxos
+    consistentes, facilitar o uso por teclado e telas pequenas, e reduzir
+    complexidade. Prefira index.html, style.css e script.js; use outros arquivos
+    somente quando forem necessários para o pedido.
+
+    Regras:
+    - Entregue arquivos completos e coerentes entre si; cada controle visível deve
+      ter uma ação funcional ou ser claramente apresentado como informativo.
+    - Não use SDD, plano técnico SDD, rastreabilidade formal ou backend.
+    - O arquivo de entrada deve abrir diretamente no navegador. Prefira HTML, CSS
+      e JavaScript sem dependências; não use módulos ES, build, servidor ou fetch
+      local.
+    - Não invente autenticação, perfis, integrações, dados de demonstração ou
+      funcionalidades. Use persistência somente quando pedida ou necessária ao
+      fluxo solicitado. Registre decisões indispensáveis e limitações no relatório.
+    - Garanta layout adaptável, labels, foco visível e estados vazios/erro/sucesso
+      quando forem pertinentes às interações pedidas.
+    - Use `textContent` e APIs DOM seguras para conteúdo fornecido pelo usuário;
+      não monte HTML executável com dados dinâmicos.
+    - Revise sintaxe, caminhos locais e dependências entre scripts. Não declare
+      execução ou testes sem evidência.
+    - Não deixe TODOs, trechos omitidos nem estados que simulem sucesso sem executar
+      a ação correspondente.
+    - No relatório, resuma o escopo atendido, decisões e limitações. Não crie IDs
+      ENF/ERN nem rastreabilidade; isso pertence ao revisor natural.
+
+    ===== PEDIDO DO USUÁRIO =====
+    [[PROMPT]]
+    ===== FIM =====
+  expected_output: >
+    Objeto com arquivos HTML/CSS/JS completos, arquivo de entrada index.html e
+    relatório curto com decisões e limitações. Não incluir rastreabilidade formal.
+
+revisar_natural:
+  agent: revisor_natural
+  description: >
+    Faça uma revisão independente e objetiva da implementação. Compare o pedido
+    com os comportamentos e arquivos realmente fornecidos; priorize falhas que
+    impeçam um fluxo solicitado, inconsistências entre arquivos e riscos concretos.
+
+    O código abaixo inclui números de linha à esquerda, seguidos de `|`. Esses
+    números são metadados para citações, não fazem parte do código. Cite os números
+    exatos sempre que possível; não atribua evidência que não esteja visível.
+
+    - Extraia requisitos funcionais ENF somente de pedidos explícitos. Separe
+      ambiguidades e inferências dos requisitos; não as transforme em solicitações.
+    - Inclua ERN apenas quando houver uma restrição não funcional explícita ou
+      necessária para avaliar um comportamento solicitado.
+    - Para cada requisito, dê status (atendido, parcial, não atendido ou não
+      verificável) e cite arquivo e linha como evidência. Não considere o nome do
+      arquivo ou função, isoladamente, prova de comportamento.
+    - Inspecione sintaxe aparente, referências locais, segurança, acessibilidade e
+      responsividade somente em relação ao pedido e ao código disponível. Não altere
+      o código nem afirme execução real.
+    - Separe inspeção estática, testes existentes, testes recomendados e testes
+      executados com evidência. Se não houver evidência de execução, declare isso.
+    - Evite repetir a mesma lacuna em várias seções. Termine com os problemas
+      concretos mais importantes, ordenados por impacto; não afirme correções.
+
+    ===== PEDIDO NATURAL =====
+    [[PROMPT]]
+    ===== CÓDIGO GERADO =====
     [[CODIGO]]
     ===== FIM =====
   expected_output: >
-    Objeto com a lista de arquivos corrigidos (caminho relativo e conteúdo
-    completo), o arquivo de entrada (index.html) e um relatório curto do que
-    foi corrigido.
+    Documento Markdown conciso com: resumo do pedido; matriz ENF/ERN com critério,
+    status e evidência em arquivo/linha; ambiguidades e inferências separadas;
+    inspeção estática; testes existentes, recomendados e executados diferenciados;
+    principais lacunas ordenadas por impacto e conclusão.
+
+avaliar:
+  agent: avaliador
+  description: >
+    Faça uma auditoria técnica com escopo limitado aos arquivos e ao contexto
+    fornecidos. Inspecione primeiro a integridade da entrega e depois os problemas
+    de comportamento e qualidade. Corrija apenas defeitos confirmados, preservando
+    código e UX válidos; não faça refatorações amplas.
+
+    Ordene a análise: bloqueio de inicialização/fluxo principal; requisitos e
+    comportamento; segurança e integridade de dados; acessibilidade e responsividade;
+    manutenção e performance. Para cada correção, confirme que ela não contradiz
+    outro requisito ou arquivo.
+
+    ===== TIPO DA GERAÇÃO =====
+    [[TIPO_AVALIACAO]]
+
+    Para uma geração SDD, verifique matriz de rastreabilidade, conformidade com
+    especificação/plano, critérios de aceitação, testes planejados e realizados,
+    regressões e qualidade técnica.
+
+    Para linguagem natural, use o pedido/documentação disponível como contexto.
+    Não gere rastreabilidade ENF/ERN nem conclua testes sem evidência. Verifique
+    proximidade com o pedido, consistência, estados vazios/erro/sucesso, interações,
+    persistência, responsividade, acessibilidade e limitações declaradas.
+
+    Nos dois tipos, avalie arquitetura proporcional ao escopo, tratamento de erros,
+    segurança contra injeção, compatibilidade e performance. Confirme caminhos
+    locais e ordem de dependências. Para scripts clássicos, confira sintaxe aparente,
+    blocos `switch` e restrições `file://` quando aplicáveis.
+
+    Para cada achado confirmado, registre severidade (CRÍTICA/ALTA/MÉDIA/BAIXA),
+    arquivo/linha disponível, evidência, impacto e correção aplicada. Separe
+    verificações estáticas de testes com evidência. Não escreva “testado” ou
+    “aprovado” sem comprovação; não classifique requisito como atendido sem evidência.
+    Devolva todos os arquivos afetados completos e preserve caminhos originais.
+
+    ===== ESPECIFICAÇÃO/PLANO =====
+    [[ESPECIFICACAO]]
+    ===== CÓDIGO =====
+    [[CODIGO]]
+    ===== FIM =====
+    Entregue `index.html` na lista de arquivos para validar a entrada, mesmo que
+    ele não precise de alteração. Inclua também todos os arquivos corrigidos com
+    seus caminhos relativos originais; não invente arquivos de dependência.
+  expected_output: >
+    Objeto estruturado com arquivos afetados completos (caminho relativo e conteúdo),
+    index.html como entrada e relatório Markdown em português com resumo, achados
+    confirmados por severidade, evidência, impacto, correções aplicadas, inspeções
+    estáticas, testes executados com evidência e lacunas. Quando nenhum arquivo
+    mudar, devolva os arquivos necessários para manter a saída estruturada válida
+    e declare que nenhuma correção verificável foi aplicada.
+
+    Para linguagem natural, não gere requisitos ENF/ERN nem matrizes de rastreabilidade;
+    essa responsabilidade pertence ao agente rastreador natural. Não invente testes
+    ou resultados. Não atribua status de rastreabilidade formal; apresente apenas
+    achados técnicos verificáveis e correções aplicadas.
+
+comparar:
+  agent: avaliador
+  description: >
+    Compare as duas implementações sem modificar nem misturar seus arquivos.
+    Considere a especificação/plano SDD e o pedido natural como fontes de requisitos
+    distintas. Avalie ambos com critérios técnicos comuns e critérios específicos
+    de cada pedido, separando fatos observados de inferências.
+
+    Compare cobertura, fluxos funcionais, arquitetura adequada ao escopo, segurança,
+    acessibilidade, responsividade, persistência, erros, testes e manutenção.
+    Cite evidência por arquivo e linha quando disponível. Registre diferenças de
+    escopo sem classificar como falha aquilo que não foi pedido naquela versão.
+    Não declare superioridade sem evidências equivalentes. Identifique lacunas,
+    severidade/impacto e limitações; não proponha nem aplique correções.
+
+    ===== GERAÇÃO SDD =====
+    [[CODIGO_SDD]]
+    ===== GERAÇÃO LINGUAGEM NATURAL =====
+    [[CODIGO_NATURAL]]
+    ===== FIM =====
+  expected_output: >
+    Apenas um relatório Markdown conciso com resumo, critérios de comparação,
+    matriz lado a lado, evidências por versão, diferenças de escopo, lacunas
+    priorizadas, limitações e conclusão. Não inclua arquivos de código.

@@ -12,11 +12,22 @@ versao_ok() {  # devolve 0 se o interpretador for 3.10 a 3.13
 }
 
 PY=""
-for cand in python3.13 python3.12 python3.11 python3.10 python3 python; do
-  if command -v "$cand" >/dev/null 2>&1 && versao_ok "$cand"; then
-    PY="$(command -v "$cand")"; break
+if [ -x ".venv/bin/python" ]; then
+  if versao_ok ".venv/bin/python"; then
+    PY="$PWD/.venv/bin/python"
+    echo ">> Reutilizando ambiente virtual existente."
+  else
+    echo "ERRO: .venv existe, mas usa uma versão de Python incompatível." >&2
+    echo "Renomeie ou remova .venv manualmente para criar um ambiente novo." >&2
+    exit 1
   fi
-done
+else
+  for cand in python3.13 python3.12 python3.11 python3.10 python3 python; do
+    if command -v "$cand" >/dev/null 2>&1 && versao_ok "$cand"; then
+      PY="$(command -v "$cand")"; break
+    fi
+  done
+fi
 
 if [ -z "$PY" ]; then
   SO="$(uname -s)"
@@ -52,11 +63,12 @@ MSG
 fi
 
 echo ">> Usando $("$PY" --version) em $PY"
-rm -rf .venv
-if ! "$PY" -m venv .venv; then
-  echo "ERRO: falhou ao criar o .venv. No Ubuntu/Debian instale o pacote venv:" >&2
-  echo "  sudo apt install $(basename "$PY")-venv" >&2
-  exit 1
+if [ ! -x ".venv/bin/python" ]; then
+  if ! "$PY" -m venv .venv; then
+    echo "ERRO: falhou ao criar o .venv. No Ubuntu/Debian instale o pacote venv:" >&2
+    echo "  sudo apt install $(basename "$PY")-venv" >&2
+    exit 1
+  fi
 fi
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/pip install -r requirements.txt
