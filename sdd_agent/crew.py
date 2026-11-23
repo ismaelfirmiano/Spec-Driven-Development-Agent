@@ -1,13 +1,16 @@
-"""Pipeline de Spec-Driven Development com CrewAI + Gemini.
+"""Experimento SDD x Linguagem Natural com CrewAI + Gemini.
 
-As três etapas (analisar -> implementar -> revisar) rodam uma de cada vez.
-Assim, se o modelo falhar no meio, só a etapa que falhou é repetida, e o
-resultado de cada etapa já fica salvo em disco.
+- SDD:     especificação -> analisar (plano) -> implementar
+- Natural: pedido em linguagem natural -> gerar_natural
+O mesmo agente "desenvolvedor", com as mesmas regras técnicas, implementa as
+duas versões; a revisão (--revisar) é opcional e, se ligada, vale para ambas.
+A comparação é feita às cegas contra uma especificação de referência comum.
 """
 
 from __future__ import annotations
 
 import os
+import random
 import posixpath
 import re
 import time
@@ -18,11 +21,13 @@ import yaml
 from crewai import LLM, Agent, Crew, Process, Task
 from pydantic import BaseModel, Field
 
+from .validacao import validar
+
 CONFIG_DIR = Path(__file__).parent / "config"
 MODELO_PADRAO = "gemini/gemini-3.8-flash"
 RESERVA_PADRAO = "gemini/gemini-3.5-flash-lite,gemini/gemini-3.1-flash-lite"
 ESPERAS_SEGUNDOS = (1,)
-MAX_TOKENS_PADRAO = 8192
+MAX_TOKENS_PADRAO = 32768  # apps de specs grandes não cabem em 8k tokens
 MAX_ESPECIFICACAO_CHARS = 100_000
 
 
@@ -53,7 +58,12 @@ def _carregar_yaml(nome: str) -> dict:
         return yaml.safe_load(f)
 
 
+def _regras_tecnicas() -> str:
+    return (CONFIG_DIR / "regras_tecnicas.md").read_text(encoding="utf-8").strip()
+
+
 def _preencher(texto: str, valores: dict[str, str]) -> str:
+    valores = {"REGRAS_TECNICAS": _regras_tecnicas(), **valores}
     for chave, valor in valores.items():
         texto = texto.replace(f"[[{chave}]]", valor)
     return texto
@@ -293,82 +303,61 @@ def _codigo_com_linhas(programa: ProgramaGerado) -> str:
     return "\n\n".join(arquivos)
 
 
-def gerar_aplicacao_por_prompt(
-    prompt: str | Path, pasta_saida: Path, verbose: bool = True, modelo: str | None = None
-) -> Path:
-    """Gera um protótipo direto a partir de texto ou de um arquivo Markdown."""
-    if isinstance(prompt, Path):
-        if not prompt.is_file():
-            raise FileNotFoundError(f"Pedido em Markdown não encontrado: {prompt}")
+def _ler_pedido(prompt: str | Path) -> str:
+    """Aceita o texto do pedido ou o caminho de um arquivo .md/.txt."""
+    caminho = prompt if isinstance(prompt, Path) else Path(prompt)
+    if isinstance(prompt, Path) or (caminho.suffix.lower() in {".md", ".txt"} and caminho.is_file()):
+        if not caminho.is_file():
+            raise FileNotFoundError(f"Pedido em Markdown não encontrado: {caminho}")
         try:
-            pedido = prompt.read_text(encoding="utf-8")
+            pedido = caminho.read_text(encoding="utf-8")
         except UnicodeDecodeError as erro:
-            raise ValueError(
-                f"O arquivo {prompt} não está em codificação UTF-8."
-            ) from erro
+            raise ValueError(f"O arquivo {caminho} não está em codificação UTF-8.") from erro
     else:
-        candidato = Path(prompt)
-        if candidato.suffix.lower() == ".md" and candidato.is_file():
-            try:
-                pedido = candidato.read_text(encoding="utf-8")
-            except UnicodeDecodeError as erro:
-                raise ValueError(
-                    f"O arquivo {candidato} não está em codificação UTF-8."
-                ) from erro
-        else:
-            pedido = prompt
-
+        pedido = str(prompt)
     if not pedido.strip():
         raise ValueError("O pedido em linguagem natural está vazio")
     if len(pedido) > MAX_ESPECIFICACAO_CHARS:
-        raise ValueError(
-            f"O pedido excede o limite de {MAX_ESPECIFICACAO_CHARS:,} caracteres"
+        raise ValueError(f"O pedido excede o limite de {MAX_ESPECIFICACAO_CHARS:,} caracteres")
+    return pedido
+
+
+def _revisar(programa: ProgramaGerado, pedido: str, modelo: str | None, verbose: bool) -> ProgramaGerado:
+    """Revisão opcional, idêntica para SDD e natural. Se falhar, mantém o original."""
+    try:
+        revisado = _rodar_etapa(
+            "revisar", {"SPEC": pedido, "CODIGO": _como_texto(programa)}, modelo, verbose
         )
-    programa = _rodar_etapa(
-        "gerar_natural",
-        {"PROMPT": pedido},
-        modelo,
-        verbose,
-    )
+        if isinstance(revisado, ProgramaGerado):
+            return revisado
+    except (RuntimeError, ValueError) as erro:
+        print(f"\n>> AVISO: revisão não concluída ({erro}). Mantida a versão do desenvolvedor.")
+    return programa
+
+
+def gerar_aplicacao_por_prompt(
+    prompt: str | Path,
+    pasta_saida: Path,
+    verbose: bool = True,
+    modelo: str | None = None,
+    revisar: bool = False,
+) -> Path:
+    """Versão em linguagem natural: pedido -> desenvolvedor (sem SDD)."""
+    pedido = _ler_pedido(prompt)
+    programa = _rodar_etapa("gerar_natural", {"PROMPT": pedido}, modelo, verbose)
     if not isinstance(programa, ProgramaGerado):
-        raise RuntimeError("O agente não retornou os arquivos estruturados do protótipo.")
+        raise RuntimeError("O agente não retornou os arquivos estruturados.")
+    if revisar:
+        programa = _revisar(programa, pedido, modelo, verbose)
     entrada = gravar(programa, pasta_saida, relatorio_sdd=False)
-    (pasta_saida / "PEDIDO_NATURAL.md").write_text(
-        "# Pedido em linguagem natural\n\n" + pedido,
-        encoding="utf-8",
+    _escrever_texto_atomico(
+        pasta_saida / "PEDIDO_NATURAL.md", "# Pedido em linguagem natural\n\n" + pedido
     )
     if programa.relatorio:
-        (pasta_saida / "LIMITACOES.md").write_text(
-            "# Limitações e decisões do modo linguagem natural\n\n" + programa.relatorio,
-            encoding="utf-8",
+        _escrever_texto_atomico(
+            pasta_saida / "LIMITACOES.md",
+            "# Relatório do desenvolvedor (linguagem natural)\n\n" + programa.relatorio,
         )
-    if os.getenv("SDD_MODO_RAPIDO") == "1":
-        rastreabilidade = (
-            "# Rastreabilidade da linguagem natural\n\n"
-            "Revisão adicional omitida pelo modo rápido; use `--avaliar` "
-            "quando quiser uma auditoria técnica sob demanda.\n"
-        )
-    else:
-        try:
-            revisao = _rodar_etapa(
-                "revisar_natural",
-                {"PROMPT": pedido, "CODIGO": _codigo_com_linhas(programa)},
-                modelo,
-                verbose,
-            )
-            rastreabilidade = str(revisao).strip()
-        except (RuntimeError, ValueError) as erro:
-            rastreabilidade = (
-                "# Rastreabilidade da linguagem natural\n\n"
-                "A revisão natural não pôde ser concluída neste ambiente. "
-                f"Motivo registrado: {erro}\n"
-            )
-    (pasta_saida / "RASTREABILIDADE_NATURAL.md").write_text(
-        rastreabilidade
-        if rastreabilidade.lower().startswith("#")
-        else "# Rastreabilidade da linguagem natural\n\n" + rastreabilidade,
-        encoding="utf-8",
-    )
     return entrada
 
 
@@ -445,38 +434,148 @@ def _ler_documentos(base: Path) -> str:
     return "\n\n".join(partes)
 
 
+EXTENSOES_CODIGO = {".html", ".htm", ".css", ".js"}
+
+
+def _arquivos_codigo(base: Path) -> list[Path]:
+    """Somente o código do programa: sem planos, relatórios ou o pedido original."""
+    if base.is_file():
+        return [base]
+    return sorted(
+        p for p in base.rglob("*")
+        if p.is_file() and p.suffix.lower() in EXTENSOES_CODIGO
+        and not any(parte in {".git", ".venv", "node_modules"} for parte in p.parts)
+    )
+
+
+def _codigo_para_avaliacao(base: Path) -> str:
+    """Código numerado por linha e sem documentos que revelem como foi gerado."""
+    programa = ProgramaGerado(arquivos=[
+        ArquivoGerado(
+            caminho=p.name if base.is_file() else p.relative_to(base).as_posix(),
+            conteudo=p.read_text(encoding="utf-8", errors="replace"),
+        )
+        for p in _arquivos_codigo(base)
+    ])
+    if not programa.arquivos:
+        raise RuntimeError(f"Nenhum arquivo HTML/CSS/JS encontrado em {base}.")
+    return _codigo_com_linhas(programa)
+
+
+def metricas_objetivas(base: Path) -> dict:
+    """Métricas que não dependem de LLM: testes no navegador e tamanho do código."""
+    arquivos = _arquivos_codigo(base)
+    linhas = {".html": 0, ".css": 0, ".js": 0}
+    for p in arquivos:
+        ext = ".html" if p.suffix.lower() == ".htm" else p.suffix.lower()
+        linhas[ext] += sum(1 for linha in p.read_text(encoding="utf-8", errors="replace").splitlines() if linha.strip())
+    pasta = base if base.is_dir() else base.parent
+    entrada = "index.html" if (pasta / "index.html").is_file() else (arquivos[0].name if arquivos else "index.html")
+    problemas, metodo = validar(pasta, entrada)
+    return {
+        "arquivos": len(arquivos),
+        "linhas_html": linhas[".html"],
+        "linhas_css": linhas[".css"],
+        "linhas_js": linhas[".js"],
+        "linhas_total": sum(linhas.values()),
+        "problemas": problemas,
+        "metodo_validacao": metodo,
+    }
+
+
+def _tabela_metricas(rotulos: dict[str, dict]) -> str:
+    nomes = list(rotulos)
+    linhas = [
+        "| Métrica | " + " | ".join(nomes) + " |",
+        "|---|" + "---|" * len(nomes),
+    ]
+    for chave, titulo in (
+        ("arquivos", "Arquivos HTML/CSS/JS"),
+        ("linhas_html", "Linhas HTML (não vazias)"),
+        ("linhas_css", "Linhas CSS (não vazias)"),
+        ("linhas_js", "Linhas JS (não vazias)"),
+        ("linhas_total", "Linhas de código no total"),
+    ):
+        linhas.append(f"| {titulo} | " + " | ".join(str(rotulos[n][chave]) for n in nomes) + " |")
+    linhas.append(
+        "| Problemas no teste automático | "
+        + " | ".join(str(len(rotulos[n]["problemas"])) for n in nomes) + " |"
+    )
+    texto = "\n".join(linhas) + "\n"
+    for nome in nomes:
+        m = rotulos[nome]
+        texto += f"\n**{nome}** — validação: {m['metodo_validacao']}\n"
+        texto += "".join(f"\n- {p.splitlines()[0]}" for p in m["problemas"]) or "\n- nenhum problema encontrado"
+        texto += "\n"
+    return texto
+
+
 def comparar_codigo(
     sdd: Path,
     natural: Path,
     verbose: bool = True,
     modelo: str | None = None,
+    referencia: Path | None = None,
+    destino: Path | None = None,
+    semente: int | None = None,
 ) -> Path:
-    """Compara uma geração SDD com uma geração em linguagem natural."""
-    if not sdd.exists():
-        raise RuntimeError(f"Geração SDD não encontrada: {sdd}")
-    if not natural.exists():
-        raise RuntimeError(f"Geração natural não encontrada: {natural}")
+    """Compara às cegas a versão SDD e a versão natural contra a mesma referência.
 
-    codigo_sdd = _ler_documentos(sdd)
-    codigo_natural = _ler_documentos(natural)
+    A referência (gabarito) é a especificação SDD completa. Se não for informada,
+    usa o ESPECIFICACAO.md gravado junto da geração SDD.
+    """
+    for rotulo, caminho in (("SDD", sdd), ("natural", natural)):
+        if not caminho.exists():
+            raise RuntimeError(f"Geração {rotulo} não encontrada: {caminho}")
+    if referencia is None:
+        referencia = (sdd if sdd.is_dir() else sdd.parent) / "ESPECIFICACAO.md"
+    if not referencia.is_file():
+        raise RuntimeError(
+            f"Especificação de referência não encontrada: {referencia}. "
+            "Informe-a com --referencia specs/<spec>.md"
+        )
+
+    metricas = {"SDD": metricas_objetivas(sdd), "Natural": metricas_objetivas(natural)}
+
+    # Cegamento: o avaliador vê apenas "A" e "B", em ordem sorteada, e só o código.
+    sorteio = random.Random(semente)
+    ordem = ["SDD", "Natural"]
+    sorteio.shuffle(ordem)
+    mapa = dict(zip(("A", "B"), ordem))
+    caminhos = {"SDD": sdd, "Natural": natural}
+
     resultado = _rodar_etapa(
         "comparar",
-        {"CODIGO_SDD": codigo_sdd, "CODIGO_NATURAL": codigo_natural},
+        {
+            "REFERENCIA": referencia.read_text(encoding="utf-8"),
+            "METRICAS": _tabela_metricas({f"Versão {k}": metricas[v] for k, v in mapa.items()}),
+            "CODIGO_A": _codigo_para_avaliacao(caminhos[mapa["A"]]),
+            "CODIGO_B": _codigo_para_avaliacao(caminhos[mapa["B"]]),
+        },
         modelo,
         verbose,
     )
     if not isinstance(resultado, RelatorioGerado):
         raise RuntimeError("O avaliador comparativo não retornou um relatório estruturado.")
 
-    nome_sdd = sdd.name if sdd.is_dir() else sdd.stem
-    nome_natural = natural.name if natural.is_dir() else natural.stem
-    destino = Path("comparacoes") / f"{nome_sdd}_vs_{nome_natural}"
+    if destino is None:
+        nome_sdd = sdd.name if sdd.is_dir() else sdd.stem
+        nome_natural = natural.name if natural.is_dir() else natural.stem
+        destino = Path("comparacoes") / f"{nome_sdd}_vs_{nome_natural}"
     destino.mkdir(parents=True, exist_ok=True)
-    relatorio = resultado.relatorio
-    relatorio = f"# Comparação — SDD vs Linguagem Natural\n\n{relatorio.lstrip('#').lstrip()}"
-    (destino / "RELATORIO_COMPARATIVO.md").write_text(relatorio, encoding="utf-8")
-
-    return destino
+    relatorio = (
+        "# Comparação às cegas — SDD vs Linguagem Natural\n\n"
+        f"Referência (gabarito): `{referencia}`\n\n"
+        "## Métricas objetivas (sem LLM)\n\n"
+        + _tabela_metricas(metricas)
+        + "\n## Avaliação do LLM (às cegas)\n\n"
+        + resultado.relatorio.strip()
+        + "\n\n## Revelação do cegamento\n\n"
+        + "\n".join(f"- **Versão {k}** = {v} (`{caminhos[v]}`)" for k, v in mapa.items())
+        + "\n"
+    )
+    _escrever_texto_atomico(destino / "RELATORIO_COMPARATIVO.md", relatorio)
+    return destino / "RELATORIO_COMPARATIVO.md"
 
 
 def avaliar_codigo(
@@ -571,8 +670,9 @@ def gerar_aplicacao(
     pasta_saida: Path,
     verbose: bool = True,
     modelo: str | None = None,
+    revisar: bool = False,
 ) -> Path:
-    """Gera a aplicação completa em três etapas rápidas e consecutivas."""
+    """Versão SDD: especificação -> analista (plano) -> desenvolvedor."""
     if not arquivo_spec.is_file():
         raise ValueError(f"Especificação não encontrada: {arquivo_spec}")
     spec = arquivo_spec.read_text(encoding="utf-8")
@@ -583,31 +683,41 @@ def gerar_aplicacao(
             f"Especificação excede o limite de {MAX_ESPECIFICACAO_CHARS:,} caracteres"
         )
     pasta_saida.mkdir(parents=True, exist_ok=True)
+    _escrever_texto_atomico(pasta_saida / "ESPECIFICACAO.md", spec)
     valores = {"SPEC": spec, "ARQUIVO": arquivo_spec.name}
 
     # 1) Análise -> plano técnico (salvo já, para não se perder)
     plano = _rodar_etapa("analisar", valores, modelo, verbose)
-    (pasta_saida / "PLANO_TECNICO.md").write_text(plano, encoding="utf-8")
+    _escrever_texto_atomico(pasta_saida / "PLANO_TECNICO.md", plano)
     valores["PLANO"] = plano
 
     # 2) Implementação completa em uma única passagem.
-    valores["FASE"] = "entrega completa unificada das Fases 1, 2 e 3"
-    rascunho = _rodar_etapa("implementar", valores, modelo, verbose)
-    if not isinstance(rascunho, ProgramaGerado):
+    programa = _rodar_etapa("implementar", valores, modelo, verbose)
+    if not isinstance(programa, ProgramaGerado):
         raise RuntimeError("O desenvolvedor não retornou arquivos estruturados")
-    entrada = gravar(rascunho, pasta_saida)
-    print(f"\n>> Aplicação completa salva em {pasta_saida}")
-    valores["CODIGO"] = _como_texto(rascunho)
 
-    # 3) Revisão final. O modo rápido omite esta chamada e preserva o rascunho.
-    if os.getenv("SDD_MODO_RAPIDO") == "1":
-        return entrada
-
-    try:
-        final = _rodar_etapa("revisar", valores, modelo, verbose)
-        if not isinstance(final, ProgramaGerado):
-            raise RuntimeError("O revisor não retornou arquivos estruturados")
-        entrada = gravar(final, pasta_saida)
-    except (RuntimeError, ValueError) as erro:
-        print(f"\n>> AVISO: revisão não concluída ({erro}). Mantida a versão do desenvolvedor.")
+    # 3) Revisão opcional (a mesma usada na versão natural).
+    if revisar:
+        programa = _revisar(programa, spec, modelo, verbose)
+    entrada = gravar(programa, pasta_saida)
+    print(f"\n>> Aplicação SDD salva em {pasta_saida}")
     return entrada
+
+
+def executar_experimento(
+    arquivo_spec: Path,
+    pedido_natural: Path,
+    pasta: Path | None = None,
+    verbose: bool = True,
+    modelo: str | None = None,
+    revisar: bool = False,
+) -> Path:
+    """Gera as duas versões nas mesmas condições e compara às cegas."""
+    pasta = pasta or Path("experimentos") / arquivo_spec.stem
+    print(f"\n=== Experimento: {arquivo_spec} (SDD) x {pedido_natural} (natural) ===")
+    gerar_aplicacao(arquivo_spec, pasta / "sdd", verbose, modelo, revisar)
+    gerar_aplicacao_por_prompt(pedido_natural, pasta / "natural", verbose, modelo, revisar)
+    return comparar_codigo(
+        pasta / "sdd", pasta / "natural", verbose, modelo,
+        referencia=arquivo_spec, destino=pasta,
+    )

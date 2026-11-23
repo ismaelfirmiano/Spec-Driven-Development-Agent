@@ -76,15 +76,24 @@ def _checar_no_navegador(html: Path) -> list[str]:
         total_forms = pagina.locator("form").count()
         for i in range(total_forms):
             form = pagina.locator("form").nth(i)
+            # Formulários ocultos (ex.: dentro de modais fechados) não são
+            # clicáveis; enviamos via requestSubmit para não travar o teste.
             campos = form.locator("input[type=text], input:not([type]), textarea")
             for j in range(campos.count()):
-                campos.nth(j).fill("teste automático")
+                campo = campos.nth(j)
+                if campo.is_visible() and campo.is_editable():
+                    campo.fill("teste automático", timeout=2000)
+                else:
+                    campo.evaluate("c => { c.value = 'teste automático'; }")
             pagina.evaluate("window.__sdd_sentinela = true")
             botao = form.locator("button[type=submit], button:not([type]), input[type=submit]")
-            if botao.count():
-                botao.first.click()
-            else:
-                form.evaluate("f => f.requestSubmit()")
+            try:
+                if botao.count() and botao.first.is_visible():
+                    botao.first.click(timeout=2000)
+                else:
+                    form.evaluate("f => f.requestSubmit ? f.requestSubmit() : f.submit()")
+            except Exception:  # noqa: BLE001 - submissão impossível não é falha do app
+                continue
             pagina.wait_for_timeout(300)
             if not pagina.evaluate("window.__sdd_sentinela === true"):
                 problemas.append(

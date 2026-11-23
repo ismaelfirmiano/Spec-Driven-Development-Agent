@@ -7,13 +7,15 @@ Uso:
     python main.py --spec specs/minha_spec.md --modo sdd
     python main.py --spec specs/linguagem_natural.md --modo natural --abrir
     python main.py --prompt "Crie um gerenciador de tarefas web" # cria pela linguagem natural
+    python main.py --experimento specs/todomvc_sdd.md specs/todomvc_natural.md
+                                                       # gera SDD + natural e compara às cegas
+    python main.py --comparar output/x natural_language/y --referencia specs/x.md
     python main.py --avaliar                             # avalia e corrige a geração mais recente
     python main.py --avaliar output/exemplo_tarefas      # avalia uma pasta específica
     python main.py --modelos                           # lista modelos Gemini disponíveis
 """
 
 import argparse
-import os
 import re
 import sys
 import webbrowser
@@ -86,24 +88,46 @@ def main() -> int:
     parser.add_argument("--prompt", help="Cria o programa a partir de um pedido em linguagem natural")
     parser.add_argument("--modo", choices=("sdd", "natural", "auto"), default="auto", help="Tipo de execução ao usar --spec ou spec posicional")
     parser.add_argument("--avaliar", nargs="?", const="auto", metavar="CAMINHO", help="Avalia e corrige o último código SDD/natural ou uma pasta/arquivo informado")
-    parser.add_argument("--comparar", nargs=2, metavar=("SDD", "NATURAL"), help="Compara uma geração SDD com uma geração em linguagem natural")
+    parser.add_argument("--comparar", nargs=2, metavar=("SDD", "NATURAL"), help="Compara às cegas uma geração SDD com uma em linguagem natural")
+    parser.add_argument("--referencia", type=Path, help="Especificação usada como gabarito no --comparar (padrão: ESPECIFICACAO.md da pasta SDD)")
+    parser.add_argument("--experimento", nargs=2, type=Path, metavar=("SPEC_SDD", "PEDIDO_NATURAL"), help="Gera as duas versões nas mesmas condições e compara às cegas")
+    parser.add_argument("--revisar", action="store_true", help="Liga a revisão automática (aplicada igualmente a SDD e natural)")
     parser.add_argument("--tipo-avaliacao", choices=("auto", "sdd", "natural"), default="auto", help="Tipo da avaliação: automático, SDD ou linguagem natural")
-    parser.add_argument("--rapido", action="store_true", help="Modo leve: menos chamadas e menos revisão automática")
     parser.add_argument("--modelos", action="store_true", help="Lista os modelos Gemini disponíveis para sua chave")
     args = parser.parse_args()
-
-    if args.rapido:
-        os.environ["SDD_MODO_RAPIDO"] = "1"
 
     if args.modelos:
         return listar_modelos()
 
-    modos = sum(bool(valor) for valor in (args.prompt, args.avaliar, args.comparar))
+    modos = sum(bool(valor) for valor in (args.prompt, args.avaliar, args.comparar, args.experimento))
     if modos > 1:
-        parser.error("use somente um modo por vez: --prompt, --avaliar ou --comparar")
+        parser.error("use somente um modo por vez: --prompt, --avaliar, --comparar ou --experimento")
 
     # Import adiado: deixa --help rápido e dá erro claro se faltar dependência.
-    from sdd_agent import avaliar_codigo, comparar_codigo, gerar_aplicacao, gerar_aplicacao_por_prompt
+    from sdd_agent import (
+        avaliar_codigo,
+        comparar_codigo,
+        executar_experimento,
+        gerar_aplicacao,
+        gerar_aplicacao_por_prompt,
+    )
+
+    if args.experimento:
+        spec, pedido = args.experimento
+        for caminho in (spec, pedido):
+            if not caminho.is_file():
+                print(f"Arquivo não encontrado: {caminho}", file=sys.stderr)
+                return 1
+        try:
+            relatorio = executar_experimento(
+                spec, pedido, args.saida, verbose=not args.quieto,
+                modelo=args.modelo, revisar=args.revisar,
+            )
+        except (RuntimeError, ValueError, FileNotFoundError) as erro:
+            print(f"Erro no experimento: {erro}", file=sys.stderr)
+            return 1
+        print(f"\nRelatório comparativo: {relatorio.resolve()}")
+        return 0
 
     if args.comparar:
         try:
@@ -112,6 +136,7 @@ def main() -> int:
                 Path(args.comparar[1]),
                 verbose=not args.quieto,
                 modelo=args.modelo,
+                referencia=args.referencia,
             )
         except (RuntimeError, ValueError, FileNotFoundError) as erro:
             print(f"Erro na comparação: {erro}", file=sys.stderr)
@@ -140,7 +165,8 @@ def main() -> int:
         pasta = args.saida or Path("natural_language") / slug
         try:
             entrada = gerar_aplicacao_por_prompt(
-                args.prompt, pasta, verbose=not args.quieto, modelo=args.modelo
+                args.prompt, pasta, verbose=not args.quieto, modelo=args.modelo,
+                revisar=args.revisar,
             )
         except (RuntimeError, ValueError, FileNotFoundError) as erro:
             print(f"Erro na geração por linguagem natural: {erro}", file=sys.stderr)
@@ -174,6 +200,7 @@ def main() -> int:
                 pasta,
                 verbose=not args.quieto,
                 modelo=args.modelo,
+                revisar=args.revisar,
             )
         except (RuntimeError, ValueError, FileNotFoundError) as erro:
             print(f"Erro na geração natural: {erro}", file=sys.stderr)
@@ -191,6 +218,7 @@ def main() -> int:
             pasta,
             verbose=not args.quieto,
             modelo=args.modelo,
+            revisar=args.revisar,
         )
     except (RuntimeError, ValueError, FileNotFoundError) as erro:
         print(f"Erro na geração SDD: {erro}", file=sys.stderr)

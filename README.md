@@ -1,167 +1,119 @@
 # Spec-Driven-Development-Agent
 
-Agente de IA que transforma especificações ou pedidos em linguagem natural
-em programas web (HTML/CSS/JS) prontos para abrir no navegador. Usa **CrewAI**
-para orquestrar agentes especializados e **Gemini** (Google Gen AI) como modelo.
+Experimento que compara **Spec-Driven Development (SDD)** com **desenvolvimento
+por linguagem natural** usando agentes de IA. Os agentes geram programas web
+(HTML/CSS/JS) que abrem direto no navegador. Usa **CrewAI** para orquestrar os
+agentes e **Gemini** (Google Gen AI) como modelo.
 
-O projeto possui seis agentes especializados:
+## Desenho do experimento
 
-- **Analista**: transforma especificações em planos técnicos SDD.
-- **Desenvolvedor**: implementa o plano em HTML, CSS e JavaScript.
-- **Revisor**: corrige e rastreia a implementação SDD.
-- **Interpretador**: cria protótipos simples por linguagem natural.
-- **Revisor Natural**: revisa o protótipo, deriva requisitos ENF/ERN e evidencia correções prioritárias.
-- **Avaliador**: avalia, corrige e compara os modos SDD e natural.
-
-## Pipeline
+A pergunta é: *usar SDD gera um código melhor do que pedir em linguagem natural?*
+Para a resposta ser válida, **só a forma da entrada muda** entre as duas versões:
 
 ```
-spec.md ─► Analista ─► Desenvolvedor ─► [teste no navegador ─► corrigir]* ─► Revisor ─► [teste ─► corrigir]* ─► output/<spec>/
-           (plano RF/RNF)  (HTML/CSS/JS)     (Playwright, até 2 rodadas)        (QA)
+SDD:      spec.md ──► Analista (plano) ──► Desenvolvedor ──┐
+                                                           ├─► Avaliador às cegas ──► RELATORIO_COMPARATIVO.md
+Natural:  pedido.md ─────────────────────► Desenvolvedor ──┘   (gabarito = spec SDD)
 ```
 
-O revisor é um LLM e pode aprovar código quebrado. Por isso, cada versão passa
-por uma **validação automática** (`sdd_agent/validacao.py`), que não depende do
-modelo: abre o `index.html` num navegador headless, captura erros de JavaScript,
-confere se os arquivos referenciados existem e envia os formulários para
-detectar recarregamento da página. Se algo falha, os erros voltam para o
-desenvolvedor corrigir. Sem Playwright, a validação usa `node --check`.
+- **Mesmo desenvolvedor:** o mesmo agente, modelo, temperatura e as mesmas regras
+  técnicas (`sdd_agent/config/regras_tecnicas.md`) implementam as duas versões.
+- **Sem correção automática por padrão:** um agente que revisa e corrige o código
+  esconderia a diferença que queremos medir (ele "conserta" justamente o que a
+  falta de especificação deixou de fora). A revisão existe como opção
+  (`--revisar`), mas, se ligada, é aplicada **igualmente** às duas versões, para
+  testar uma segunda hipótese: *a revisão diminui a distância entre SDD e natural?*
+- **O avaliador só mede, não corrige.** Ele recebe apenas o código (sem plano,
+  relatório ou pedido), com as versões chamadas de "A" e "B" em ordem sorteada.
+  A revelação de quem é quem fica no fim do relatório.
+- **Gabarito comum:** as duas versões são avaliadas contra a especificação SDD
+  completa (o pedido natural descreve o mesmo produto, só que sem o detalhamento
+  de requisitos, regras e critérios de aceitação).
+- **Métricas objetivas sem LLM** (`sdd_agent/validacao.py`): abre cada versão num
+  navegador headless (Playwright), captura erros de JavaScript, verifica arquivos
+  referenciados e envio de formulários; conta arquivos e linhas de código.
 
-Saída em `output/<nome-da-spec>/`: os arquivos do programa, `PLANO_TECNICO.md`,
-`RELATORIO_RASTREABILIDADE.md` (requisito → código → status) e `VALIDACAO.md`
-(resultado dos testes automáticos e correções feitas).
+### Agentes
+
+| Agente | Papel |
+|---|---|
+| Analista | Transforma a especificação em plano técnico (só no SDD). |
+| Desenvolvedor | Implementa a aplicação (o mesmo para SDD e natural). |
+| Revisor | Opcional (`--revisar`); revisa e corrige as duas versões da mesma forma. |
+| Avaliador | Compara às cegas (`--comparar`) e audita/corrige sob demanda (`--avaliar`). |
 
 ## Instalação
 
-> O CrewAI exige **Python ≥3.10 e <3.14**. O `setup.sh` funciona em **macOS e Linux**:
-> usa um Python compatível já instalado ou instala o 3.13 (Homebrew no Mac, `uv` no Linux).
+> O CrewAI exige **Python ≥3.10 e <3.14**. O `setup.sh` funciona em **macOS e Linux**.
 
 ```bash
-./setup.sh                 # cria .venv (Python 3.10–3.13) e instala requirements.txt
+./setup.sh                 # cria .venv, instala requirements.txt e o Chromium do Playwright
 source .venv/bin/activate
 # edite .env e coloque sua GEMINI_API_KEY (https://aistudio.google.com/apikey)
 ```
 
-No Ubuntu/Debian, se a criação do `.venv` falhar, instale o pacote venv
-(ex.: `sudo apt install python3.12-venv`).
+## Rodando o experimento
 
-Manual (qualquer sistema): `python3.13 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && cp .env.example .env`
+Pares prontos de especificação SDD + pedido em linguagem natural:
 
-## Uso rápido
-
-SDD completo usando os três agentes originais:
-
-```bash
-python main.py specs/exemplo_tarefas.md --abrir
-```
-
-Linguagem natural:
+| Aplicação | Especificação SDD | Pedido natural |
+|---|---|---|
+| TodoMVC (spec pública, `tastejs/todomvc`, MIT) | `specs/todomvc_sdd.md` (425 linhas) | `specs/natural_todomvc.md` |
+| TaskFlow (gerenciador de tarefas completo) | `specs/TaskFlow.md` (598 linhas) | `specs/natural_taskflow.md` |
 
 ```bash
-python main.py specs/linguagem_natural.md --abrir
-python main.py --prompt "Crie uma lista de tarefas simples" --abrir
+python main.py --experimento specs/todomvc_sdd.md specs/natural_todomvc.md
+python main.py --experimento specs/TaskFlow.md specs/natural_taskflow.md
+python main.py --experimento specs/TaskFlow.md specs/natural_taskflow.md --revisar -o experimentos/taskflow_revisado
 ```
 
-Com um arquivo Markdown, `--modo auto` analisa o conteúdo e escolhe entre SDD
-e linguagem natural automaticamente. Você também pode definir manualmente:
+Saída em `experimentos/<spec>/`: `sdd/`, `natural/` e `RELATORIO_COMPARATIVO.md`
+(métricas objetivas, matriz requisito × versão, cobertura, notas por critério e
+revelação do cegamento).
+
+Como os LLMs não são determinísticos, rode cada par **várias vezes** (ex.: 3 a 5,
+com `-o experimentos/taskflow_1`, `_2`, ...) e compare as médias.
+
+### Passos separados
 
 ```bash
-python main.py specs/exemplo_tarefas.md --modo sdd --abrir
-python main.py specs/meu_pedido.md --modo natural --abrir
+python main.py specs/TaskFlow.md --sem-abrir                 # só SDD     -> output/TaskFlow/
+python main.py specs/natural_taskflow.md --sem-abrir         # só natural -> natural_language/natural_taskflow/
+python main.py --comparar output/TaskFlow natural_language/natural_taskflow --referencia specs/TaskFlow.md
+python main.py --prompt "Crie uma lista de tarefas" --abrir  # pedido direto na linha de comando
 ```
 
-O SDD usa uma geração unificada das Fases 1–3 em uma única implementação,
-seguida apenas pela revisão final. Ao concluir, tanto o SDD quanto a linguagem
-natural abrem automaticamente o HTML gerado no navegador. Use `--sem-abrir`
-para desativar esse comportamento.
+Com um arquivo Markdown, `--modo auto` (padrão) escolhe SDD ou natural pelo
+conteúdo; também dá para forçar com `--modo sdd` ou `--modo natural`.
 
-Para gerar mais rápido e consumir menos contexto/tokens:
+### Escrevendo um pedido natural justo
 
-```bash
-python main.py specs/exemplo_tarefas.md --rapido --sem-abrir
-python main.py --prompt "Crie uma lista de tarefas" --rapido --sem-abrir
-```
+O pedido natural deve descrever **o mesmo produto e as mesmas funcionalidades
+principais** da spec, do jeito que uma pessoa pediria: sem IDs, sem critérios de
+aceitação, sem casos-limite e sem contrato de interface. Assim a diferença medida
+vem do detalhamento do SDD, e não de funcionalidades omitidas no pedido.
 
-O modo `--rapido` omite a revisão automática do SDD e da linguagem natural.
-A geração continua sendo gravada e pode ser auditada depois com `--avaliar`.
+### Auditoria e correção (fora do experimento)
 
-O projeto usa a Gemini API com `gemini-3.8-flash` como principal e modelos Gemini
-mais leves como reserva. O modelo `antigravity-preview` foi listado pela API, mas não funciona
-com o CrewAI porque não oferece function calling, necessário para os arquivos
-estruturados. Se um modelo for incompatível ou indisponível, o agente tenta o
-próximo modelo de `SDD_MODELOS_RESERVA`. Veja os disponíveis com:
+`python main.py --avaliar [caminho]` audita **e corrige** uma geração. Usar isso em
+apenas uma das versões invalida a comparação.
 
-```bash
-python main.py --modelos
-```
+## Modelos
 
-### Criar com linguagem natural
-
-Use `--prompt` para gerar diretamente uma aplicação em linguagem natural, fora do pipeline SDD:
-
-```bash
-python main.py --prompt "Crie um gerenciador de tarefas responsivo com prioridade, filtros e persistência local" --abrir
-```
-
-O modo não usa o pipeline SDD padrão. A saída fica separada em
-`natural_language/<nome-do-prompt>/`, com o site em `index.html` e decisões em
-`LIMITACOES.md`, `PEDIDO_NATURAL.md` e `RASTREABILIDADE_NATURAL.md`.
-O interpretador prioriza os comportamentos pedidos e evita acrescentar recursos
-sem solicitação. Em seguida, o revisor confere estaticamente a implementação e
-gera uma rastreabilidade com referências a arquivo e linha; ele não altera o
-código nem afirma que executou testes.
-
-### Avaliar o código
-
-Avalie e corrija automaticamente a geração SDD ou natural mais recente:
-
-```bash
-python main.py --avaliar
-```
-
-Ou informe um arquivo ou pasta específica:
-
-```bash
-python main.py --avaliar output/exemplo_tarefas
-python main.py --avaliar output/exemplo_tarefas/script.js
-```
-
-O avaliador detecta automaticamente se a geração é SDD ou linguagem natural. O tipo também pode ser escolhido:
-
-```bash
-python main.py --avaliar output/exemplo_tarefas --tipo-avaliacao sdd
-python main.py --avaliar natural_language/meu_site --tipo-avaliacao natural
-```
-
-Os arquivos corrigidos substituem as versões anteriores na própria pasta analisada.
-O relatório é gravado como `RELATORIO_AVALIACAO.md` e identifica o tipo avaliado.
-
-### Comparar SDD com linguagem natural
-
-```bash
-python main.py --comparar output/exemplo_tarefas natural_language/meu_site
-```
-
-O relatório fica em `comparacoes/<sdd>_vs_<natural>/RELATORIO_COMPARATIVO.md`
-e não modifica nenhuma das duas pastas originais.
-
-No modo linguagem natural, o relatório pode incluir uma rastreabilidade leve:
-`ponto solicitado → implementação → arquivo/linha → status`, sem exigir IDs RF/RNF.
-
-## Escrevendo uma especificação
-
-Markdown livre; funciona melhor com requisitos identificados (`RF-01`,
-`RNF-01`), critérios claros e uma seção "Fora do escopo". Veja
-`specs/exemplo_tarefas.md`.
+Usa `gemini-3.8-flash` como principal e modelos mais leves como reserva
+(`SDD_MODELOS_RESERVA`). Veja os disponíveis com `python main.py --modelos`.
+`SDD_MAX_TOKENS` (padrão 32768) precisa comportar o código completo de specs grandes.
 
 ## Estrutura
 
 ```
-main.py                    CLI
-sdd_agent/crew.py          agentes, tarefas, saída estruturada e gravação
-sdd_agent/config/*.yaml    papéis dos agentes e descrições das tarefas
-specs/                     especificações de entrada
-output/                    programas gerados por SDD (ignorado pelo git)
-natural_language/          programas gerados por linguagem natural (ignorado pelo git)
-comparacoes/               relatórios comparativos SDD vs linguagem natural (ignorado pelo git)
+main.py                          CLI
+sdd_agent/crew.py                agentes, etapas, experimento e comparação às cegas
+sdd_agent/validacao.py           testes automáticos no navegador (sem LLM)
+sdd_agent/config/agents.yaml     papéis dos agentes
+sdd_agent/config/tasks.yaml      descrição das etapas
+sdd_agent/config/regras_tecnicas.md  regras técnicas comuns às duas versões
+specs/                           especificações SDD e pedidos naturais
+tests/                           testes unitários (python -m unittest discover -s tests)
+experimentos/ output/ natural_language/ comparacoes/   saídas (ignoradas pelo git)
 ```

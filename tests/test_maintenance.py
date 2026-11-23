@@ -68,7 +68,7 @@ class NaturalLanguageTests(unittest.TestCase):
                 gerar_aplicacao_por_prompt("  \n", Path("saida"), verbose=False)
         rodar_etapa.assert_not_called()
 
-    def test_markdown_file_is_read_for_generation_and_review(self):
+    def test_markdown_file_is_read_and_no_review_runs_by_default(self):
         with tempfile.TemporaryDirectory() as diretorio:
             pedido = Path(diretorio) / "pedido.md"
             pedido.write_text("# Pedido\nCrie um contador simples.", encoding="utf-8")
@@ -80,17 +80,16 @@ class NaturalLanguageTests(unittest.TestCase):
             with (
                 patch(
                     "sdd_agent.crew._rodar_etapa",
-                    side_effect=[programa, "# Revisão\n\nAtendido."],
+                    side_effect=[programa],
                 ) as rodar_etapa,
                 patch("sdd_agent.crew.gravar", return_value=saida / "index.html"),
             ):
                 gerar_aplicacao_por_prompt(pedido, saida, verbose=False)
 
         chamadas = rodar_etapa.call_args_list
-        prompt_geracao = chamadas[0].args[1]["PROMPT"]
-        prompt_revisao = chamadas[1].args[1]["PROMPT"]
-        self.assertIn("# Pedido", prompt_geracao)
-        self.assertIn("Crie um contador simples.", prompt_revisao)
+        self.assertEqual(len(chamadas), 1)
+        self.assertEqual(chamadas[0].args[0], "gerar_natural")
+        self.assertIn("Crie um contador simples.", chamadas[0].args[1]["PROMPT"])
 
     def test_review_code_includes_exact_line_numbers(self):
         programa = ProgramaGerado(
@@ -107,13 +106,20 @@ class NaturalLanguageTests(unittest.TestCase):
 
 
 class AgentConfigurationTests(unittest.TestCase):
-    def test_all_six_agents_are_referenced_by_pipeline_tasks(self):
+    def test_all_agents_are_referenced_by_pipeline_tasks(self):
         config_dir = ROOT / "sdd_agent/config"
         agents = yaml.safe_load((config_dir / "agents.yaml").read_text(encoding="utf-8"))
         tasks = yaml.safe_load((config_dir / "tasks.yaml").read_text(encoding="utf-8"))
 
-        self.assertEqual(len(agents), 6)
+        self.assertEqual(set(agents), {"analista", "desenvolvedor", "revisor", "avaliador"})
         self.assertEqual({task["agent"] for task in tasks.values()}, set(agents))
+
+    def test_sdd_and_natural_use_same_developer_and_same_rules(self):
+        """Garantia do desenho experimental: só a entrada muda entre as versões."""
+        tasks = yaml.safe_load((ROOT / "sdd_agent/config/tasks.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(tasks["implementar"]["agent"], tasks["gerar_natural"]["agent"])
+        self.assertIn("[[REGRAS_TECNICAS]]", tasks["implementar"]["description"])
+        self.assertIn("[[REGRAS_TECNICAS]]", tasks["gerar_natural"]["description"])
 
     def test_comparison_task_returns_report_without_fake_program_files(self):
         resultado = SimpleNamespace(
@@ -158,3 +164,44 @@ class DocumentReadingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExperimentTests(unittest.TestCase):
+    def _programa(self, texto):
+        return ProgramaGerado(arquivos=[
+            ArquivoGerado(caminho="index.html", conteudo=f'<main>{texto}</main><script src="app.js"></script>'),
+            ArquivoGerado(caminho="app.js", conteudo="const x = 1;"),
+        ])
+
+    def test_review_is_symmetric_when_enabled(self):
+        from sdd_agent.crew import gerar_aplicacao
+        with tempfile.TemporaryDirectory() as d:
+            spec = Path(d) / "spec.md"
+            spec.write_text("# Spec\nRF-01 contador", encoding="utf-8")
+            with patch("sdd_agent.crew._rodar_etapa",
+                       side_effect=["# Plano", self._programa("a"), self._programa("b")]) as etapa:
+                gerar_aplicacao(spec, Path(d) / "sdd", verbose=False, revisar=True)
+            self.assertEqual([c.args[0] for c in etapa.call_args_list], ["analisar", "implementar", "revisar"])
+            with patch("sdd_agent.crew._rodar_etapa",
+                       side_effect=[self._programa("a"), self._programa("b")]) as etapa:
+                gerar_aplicacao_por_prompt("Crie um contador", Path(d) / "nat", verbose=False, revisar=True)
+            self.assertEqual([c.args[0] for c in etapa.call_args_list], ["gerar_natural", "revisar"])
+
+    def test_comparison_is_blind_and_uses_only_code(self):
+        from sdd_agent.crew import comparar_codigo
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d)
+            for nome in ("sdd", "nat"):
+                (base / nome).mkdir()
+                (base / nome / "index.html").write_text(f"<main>{nome}</main>", encoding="utf-8")
+            (base / "sdd" / "PLANO_TECNICO.md").write_text("SEGREDO_SDD", encoding="utf-8")
+            (base / "sdd" / "ESPECIFICACAO.md").write_text("# Ref\nRF-01", encoding="utf-8")
+            with patch("sdd_agent.crew._rodar_etapa",
+                       return_value=RelatorioGerado(relatorio="ok")) as etapa:
+                relatorio = comparar_codigo(base / "sdd", base / "nat", verbose=False,
+                                            destino=base / "cmp", semente=1)
+            valores = etapa.call_args.args[1]
+            enviado = valores["CODIGO_A"] + valores["CODIGO_B"] + valores["METRICAS"]
+            self.assertNotIn("SEGREDO_SDD", enviado)
+            self.assertNotIn("SDD", valores["METRICAS"])
+            self.assertIn("Revelação do cegamento", relatorio.read_text(encoding="utf-8"))

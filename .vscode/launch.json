@@ -2,11 +2,29 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Experimento: TodoMVC (SDD x natural)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "args": [
+        "--experimento",
+        "specs/todomvc_sdd.md",
+        "specs/natural_todomvc.md"
+      ],
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
       "name": "SDD: Geração por especificação",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/main.py",
-      "args": ["specs/exemplo_tarefas.md", "--abrir"],
+      "args": [
+        "specs/exemplo_tarefas.md",
+        "--abrir"
+      ],
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
       "console": "integratedTerminal",
@@ -17,7 +35,11 @@
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/main.py",
-      "args": ["--prompt", "Crie uma lista de tarefas simples", "--abrir"],
+      "args": [
+        "--prompt",
+        "Crie uma lista de tarefas simples",
+        "--abrir"
+      ],
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
       "console": "integratedTerminal",
@@ -28,7 +50,9 @@
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/main.py",
-      "args": ["--avaliar"],
+      "args": [
+        "--avaliar"
+      ],
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
       "console": "integratedTerminal",

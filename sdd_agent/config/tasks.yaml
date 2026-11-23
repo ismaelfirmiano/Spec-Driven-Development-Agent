@@ -1,6 +1,8 @@
 # Etapas executadas em sequência, uma de cada vez (cada uma pode ser repetida
 # sozinha se o modelo falhar). Marcadores [[NOME]] são substituídos em Python;
 # não usamos chaves para não conflitar com CSS/JS dentro das specs.
+# [[REGRAS_TECNICAS]] vem de config/regras_tecnicas.md e é o MESMO texto para
+# a versão SDD e a versão em linguagem natural.
 
 analisar:
   agent: analista
@@ -29,245 +31,135 @@ analisar:
 implementar:
   agent: desenvolvedor
   description: >
-    Implemente a entrega completa em uma única resposta, seguindo a especificação
-    original e o plano. A especificação prevalece em caso de conflito; assinale
-    ambiguidades no relatório em vez de inventar comportamento.
+    Implemente a aplicação completa em uma única resposta, seguindo a
+    especificação e o plano técnico abaixo. A especificação prevalece em caso de
+    conflito. Cubra todos os requisitos e critérios de aceitação; não adicione
+    funcionalidades que não foram pedidas.
 
-    ===== FASE SELECIONADA =====
-    [[FASE]]
-    ===== FIM DA FASE =====
+    [[REGRAS_TECNICAS]]
 
-    Regras:
-    - Cubra todos os critérios da especificação. Priorize uma implementação simples,
-      mas não descarte requisitos por não estarem entre os mais importantes.
-    - Não adicione funcionalidades nem dados que não foram pedidos.
-    - Nunca altere outro arquivo da especificação original.
-    - Deve abrir com duplo clique em index.html (protocolo file://): nada de
-      módulos ES, fetch de arquivos locais, build ou servidor.
-    - Use apenas HTML, CSS e JavaScript puro; bibliotecas externas só se a spec
-      pedir, e então via CDN.
-    - Se a especificação pedir arquitetura modular, entregue todos os arquivos
-      previstos e referencie-os corretamente no HTML. Scripts clássicos devem
-      ser carregados na ordem de dependência; não use imports, exports ou módulos
-      ES, para preservar a abertura por file://.
-    - Antes de responder, revise cada bloco JavaScript por erros de sintaxe.
-      Em particular, dentro de `switch`, use `case`/`default` antes de instruções;
-      não coloque `if` ou outras instruções entre a abertura do switch e o primeiro case.
-    - Confirme que cada caminho usado em `src` e `href` existe na lista de arquivos
-      devolvida, e que o ponto de entrada referencia arquivos com os mesmos nomes.
-    - Não use `innerHTML`, `outerHTML` ou `document.write` com dados dinâmicos.
-      Use `textContent` e APIs DOM seguras para qualquer conteúdo de usuário.
-    - Use comentários com IDs somente onde ajudarem a localizar a implementação;
-      não polua cada linha com rastreabilidade redundante.
-    - Implemente persistência e validações quando exigidas e mantenha estados de
-      sucesso/erro coerentes com a operação real.
-    - Entregue todos os arquivos completos. Use index.html, style.css e script.js
-      como base apenas quando a especificação não pedir outra estrutura.
-    - Código completo, sem "TODO" nem trechos omitidos.
-    - No campo relatorio, liste brevemente onde cada requisito foi implementado.
+    No campo relatorio, liste brevemente onde cada requisito foi implementado.
 
+    ===== ESPECIFICAÇÃO =====
+    [[SPEC]]
     ===== PLANO TÉCNICO =====
     [[PLANO]]
-    ===== FIM DO PLANO =====
+    ===== FIM =====
   expected_output: >
     Objeto com a lista de arquivos (caminho relativo e conteúdo completo), o
     arquivo de entrada (index.html) e um relatório curto requisito -> código.
 
-revisar:
-  agent: revisor
-  description: >
-    Faça revisão independente da implementação completa contra a especificação e
-    o plano. Preserve comportamento correto, corrija somente defeitos verificáveis
-    e evite reescrever arquivos sem necessidade.
-
-    - Verifique primeiro ponto de entrada, integridade dos arquivos, sintaxe aparente,
-      ordem dos scripts, referências locais e compatibilidade com as restrições de
-      execução da especificação.
-    - Confronte cada critério com evidência concreta. Registre status e lacunas;
-      não deduza funcionamento pelo nome de arquivo, função ou comentário.
-    - Priorize bloqueadores e erros de alto impacto, depois regressões e critérios
-      incompletos. Corrija problemas confirmados sem alterar requisitos ou UX válida.
-    - Trate inserção insegura de dados dinâmicos como problema de segurança e use
-      APIs DOM seguras na correção.
-    - Separe inspeção estática, testes com evidência fornecida e testes não
-      executados. Não invente resultados ou execução no navegador.
-    - Devolva todos os arquivos finais completos exigidos pelo contrato e liste
-      correções, evidências e lacunas restantes.
-
-    ===== ESPECIFICAÇÃO ORIGINAL =====
-    [[SPEC]]
-    ===== PLANO TÉCNICO =====
-    [[PLANO]]
-    ===== CÓDIGO A REVISAR =====
-    [[CODIGO]]
-    ===== FIM =====
-  expected_output: >
-    Objeto com a lista de arquivos finais (caminho relativo e conteúdo
-    completo), o arquivo de entrada (index.html) e o relatório de
-    rastreabilidade requisito -> código -> status.
-
 gerar_natural:
-  agent: interpretador
+  agent: desenvolvedor
   description: >
-    Converta o pedido em uma aplicação web funcional, diretamente e sem etapas
-    intermediárias visíveis. Antes de escrever os arquivos, identifique as ações,
-    os dados e as restrições explicitamente pedidos; implemente cada ação como
-    comportamento utilizável, não apenas como elemento visual.
+    Implemente a aplicação completa em uma única resposta, a partir do pedido do
+    usuário abaixo. Atenda a tudo o que foi pedido; não adicione funcionalidades
+    que não foram pedidas.
 
-    Quando o pedido vier de um arquivo Markdown, trate todo o conteúdo como uma
-    especificação em linguagem natural: preserve títulos, seções, listas e
-    chamadas explícitas. Interprete instruções de cada seção e não descarte
-    requisitos porque estejam formatados em Markdown. Considere somente o trecho
-    apresentado abaixo; não invente conteúdo de arquivos não fornecidos.
+    [[REGRAS_TECNICAS]]
 
-    Priorize, nesta ordem: atender ao pedido explícito, manter os fluxos
-    consistentes, facilitar o uso por teclado e telas pequenas, e reduzir
-    complexidade. Prefira index.html, style.css e script.js; use outros arquivos
-    somente quando forem necessários para o pedido.
-
-    Regras:
-    - Entregue arquivos completos e coerentes entre si; cada controle visível deve
-      ter uma ação funcional ou ser claramente apresentado como informativo.
-    - Não use SDD, plano técnico SDD, rastreabilidade formal ou backend.
-    - O arquivo de entrada deve abrir diretamente no navegador. Prefira HTML, CSS
-      e JavaScript sem dependências; não use módulos ES, build, servidor ou fetch
-      local.
-    - Não invente autenticação, perfis, integrações, dados de demonstração ou
-      funcionalidades. Use persistência somente quando pedida ou necessária ao
-      fluxo solicitado. Registre decisões indispensáveis e limitações no relatório.
-    - Garanta layout adaptável, labels, foco visível e estados vazios/erro/sucesso
-      quando forem pertinentes às interações pedidas.
-    - Use `textContent` e APIs DOM seguras para conteúdo fornecido pelo usuário;
-      não monte HTML executável com dados dinâmicos.
-    - Revise sintaxe, caminhos locais e dependências entre scripts. Não declare
-      execução ou testes sem evidência.
-    - Não deixe TODOs, trechos omitidos nem estados que simulem sucesso sem executar
-      a ação correspondente.
-    - No relatório, resuma o escopo atendido, decisões e limitações. Não crie IDs
-      ENF/ERN nem rastreabilidade; isso pertence ao revisor natural.
+    No campo relatorio, resuma brevemente o que foi implementado e as decisões tomadas.
 
     ===== PEDIDO DO USUÁRIO =====
     [[PROMPT]]
     ===== FIM =====
   expected_output: >
-    Objeto com arquivos HTML/CSS/JS completos, arquivo de entrada index.html e
-    relatório curto com decisões e limitações. Não incluir rastreabilidade formal.
+    Objeto com a lista de arquivos (caminho relativo e conteúdo completo), o
+    arquivo de entrada (index.html) e um relatório curto do que foi implementado.
 
-revisar_natural:
-  agent: revisor_natural
+revisar:
+  # Opcional (--revisar). Quando ligado, roda nas DUAS versões com o mesmo texto;
+  # cada uma é revisada contra a sua própria entrada (spec ou pedido natural).
+  agent: revisor
   description: >
-    Faça uma revisão independente e objetiva da implementação. Compare o pedido
-    com os comportamentos e arquivos realmente fornecidos; priorize falhas que
-    impeçam um fluxo solicitado, inconsistências entre arquivos e riscos concretos.
+    Faça revisão independente da implementação contra o pedido recebido.
+    Preserve comportamento correto, corrija somente defeitos verificáveis e evite
+    reescrever arquivos sem necessidade.
 
-    O código abaixo inclui números de linha à esquerda, seguidos de `|`. Esses
-    números são metadados para citações, não fazem parte do código. Cite os números
-    exatos sempre que possível; não atribua evidência que não esteja visível.
+    - Verifique ponto de entrada, integridade dos arquivos, sintaxe aparente,
+      ordem dos scripts e referências locais.
+    - Confronte cada item do pedido com evidência concreta no código.
+    - Corrija problemas confirmados sem alterar o que foi pedido.
+    - Devolva todos os arquivos finais completos e liste as correções feitas.
 
-    - Extraia requisitos funcionais ENF somente de pedidos explícitos. Separe
-      ambiguidades e inferências dos requisitos; não as transforme em solicitações.
-    - Inclua ERN apenas quando houver uma restrição não funcional explícita ou
-      necessária para avaliar um comportamento solicitado.
-    - Para cada requisito, dê status (atendido, parcial, não atendido ou não
-      verificável) e cite arquivo e linha como evidência. Não considere o nome do
-      arquivo ou função, isoladamente, prova de comportamento.
-    - Inspecione sintaxe aparente, referências locais, segurança, acessibilidade e
-      responsividade somente em relação ao pedido e ao código disponível. Não altere
-      o código nem afirme execução real.
-    - Separe inspeção estática, testes existentes, testes recomendados e testes
-      executados com evidência. Se não houver evidência de execução, declare isso.
-    - Evite repetir a mesma lacuna em várias seções. Termine com os problemas
-      concretos mais importantes, ordenados por impacto; não afirme correções.
+    [[REGRAS_TECNICAS]]
 
-    ===== PEDIDO NATURAL =====
-    [[PROMPT]]
-    ===== CÓDIGO GERADO =====
+    ===== PEDIDO =====
+    [[SPEC]]
+    ===== CÓDIGO A REVISAR =====
     [[CODIGO]]
     ===== FIM =====
   expected_output: >
-    Documento Markdown conciso com: resumo do pedido; matriz ENF/ERN com critério,
-    status e evidência em arquivo/linha; ambiguidades e inferências separadas;
-    inspeção estática; testes existentes, recomendados e executados diferenciados;
-    principais lacunas ordenadas por impacto e conclusão.
+    Objeto com a lista de arquivos finais (caminho relativo e conteúdo
+    completo), o arquivo de entrada (index.html) e a lista de correções feitas.
 
 avaliar:
+  # Ferramenta à parte (--avaliar): audita E CORRIGE uma geração. Não faz parte
+  # do experimento; usá-la em só uma das versões invalida a comparação.
   agent: avaliador
   description: >
     Faça uma auditoria técnica com escopo limitado aos arquivos e ao contexto
-    fornecidos. Inspecione primeiro a integridade da entrega e depois os problemas
-    de comportamento e qualidade. Corrija apenas defeitos confirmados, preservando
-    código e UX válidos; não faça refatorações amplas.
+    fornecidos. Corrija apenas defeitos confirmados, preservando código e UX
+    válidos; não faça refatorações amplas.
 
     Ordene a análise: bloqueio de inicialização/fluxo principal; requisitos e
-    comportamento; segurança e integridade de dados; acessibilidade e responsividade;
-    manutenção e performance. Para cada correção, confirme que ela não contradiz
-    outro requisito ou arquivo.
+    comportamento; segurança e integridade de dados; acessibilidade e
+    responsividade; manutenção e performance.
 
     ===== TIPO DA GERAÇÃO =====
     [[TIPO_AVALIACAO]]
 
-    Para uma geração SDD, verifique matriz de rastreabilidade, conformidade com
-    especificação/plano, critérios de aceitação, testes planejados e realizados,
-    regressões e qualidade técnica.
-
-    Para linguagem natural, use o pedido/documentação disponível como contexto.
-    Não gere rastreabilidade ENF/ERN nem conclua testes sem evidência. Verifique
-    proximidade com o pedido, consistência, estados vazios/erro/sucesso, interações,
-    persistência, responsividade, acessibilidade e limitações declaradas.
-
-    Nos dois tipos, avalie arquitetura proporcional ao escopo, tratamento de erros,
-    segurança contra injeção, compatibilidade e performance. Confirme caminhos
-    locais e ordem de dependências. Para scripts clássicos, confira sintaxe aparente,
-    blocos `switch` e restrições `file://` quando aplicáveis.
-
     Para cada achado confirmado, registre severidade (CRÍTICA/ALTA/MÉDIA/BAIXA),
-    arquivo/linha disponível, evidência, impacto e correção aplicada. Separe
-    verificações estáticas de testes com evidência. Não escreva “testado” ou
-    “aprovado” sem comprovação; não classifique requisito como atendido sem evidência.
-    Devolva todos os arquivos afetados completos e preserve caminhos originais.
+    arquivo/linha, evidência, impacto e correção aplicada. Não escreva “testado”
+    ou “aprovado” sem comprovação. Devolva todos os arquivos afetados completos
+    e preserve caminhos originais.
 
-    ===== ESPECIFICAÇÃO/PLANO =====
+    ===== ESPECIFICAÇÃO/PEDIDO =====
     [[ESPECIFICACAO]]
     ===== CÓDIGO =====
     [[CODIGO]]
     ===== FIM =====
-    Entregue `index.html` na lista de arquivos para validar a entrada, mesmo que
-    ele não precise de alteração. Inclua também todos os arquivos corrigidos com
-    seus caminhos relativos originais; não invente arquivos de dependência.
+    Entregue `index.html` na lista de arquivos, mesmo que ele não precise de
+    alteração. Não invente arquivos de dependência.
   expected_output: >
-    Objeto estruturado com arquivos afetados completos (caminho relativo e conteúdo),
-    index.html como entrada e relatório Markdown em português com resumo, achados
-    confirmados por severidade, evidência, impacto, correções aplicadas, inspeções
-    estáticas, testes executados com evidência e lacunas. Quando nenhum arquivo
-    mudar, devolva os arquivos necessários para manter a saída estruturada válida
-    e declare que nenhuma correção verificável foi aplicada.
-
-    Para linguagem natural, não gere requisitos ENF/ERN nem matrizes de rastreabilidade;
-    essa responsabilidade pertence ao agente rastreador natural. Não invente testes
-    ou resultados. Não atribua status de rastreabilidade formal; apresente apenas
-    achados técnicos verificáveis e correções aplicadas.
+    Objeto estruturado com arquivos afetados completos, index.html como entrada e
+    relatório Markdown em português com achados por severidade, evidência,
+    impacto e correções aplicadas.
 
 comparar:
   agent: avaliador
   description: >
-    Compare as duas implementações sem modificar nem misturar seus arquivos.
-    Considere a especificação/plano SDD e o pedido natural como fontes de requisitos
-    distintas. Avalie ambos com critérios técnicos comuns e critérios específicos
-    de cada pedido, separando fatos observados de inferências.
+    Avalie, às cegas, duas implementações ("Versão A" e "Versão B") da MESMA
+    aplicação. Você não sabe como cada uma foi produzida. Use a especificação de
+    referência abaixo como gabarito comum e aplique exatamente os mesmos
+    critérios às duas versões. Não modifique código.
 
-    Compare cobertura, fluxos funcionais, arquitetura adequada ao escopo, segurança,
-    acessibilidade, responsividade, persistência, erros, testes e manutenção.
-    Cite evidência por arquivo e linha quando disponível. Registre diferenças de
-    escopo sem classificar como falha aquilo que não foi pedido naquela versão.
-    Não declare superioridade sem evidências equivalentes. Identifique lacunas,
-    severidade/impacto e limitações; não proponha nem aplique correções.
+    1. Liste os requisitos verificáveis da especificação de referência (use os
+       IDs dela quando existirem). Para cada requisito, dê o status em cada
+       versão — ATENDIDO, PARCIAL ou NÃO ATENDIDO — com evidência em arquivo e
+       linha. Sem evidência no código, não marque ATENDIDO.
+    2. Calcule, para cada versão, a cobertura: ATENDIDO = 1, PARCIAL = 0,5,
+       NÃO ATENDIDO = 0; informe o total e o percentual.
+    3. Dê nota de 0 a 10, para cada versão, em: corretude funcional, cobertura
+       de requisitos, regras de negócio e validações, tratamento de erros,
+       acessibilidade, responsividade, segurança, organização/manutenibilidade.
+       Justifique cada nota em uma linha.
+    4. Considere as métricas objetivas fornecidas (testes automáticos no
+       navegador e tamanho do código) como evidência adicional.
+    5. Liste os defeitos mais graves de cada versão, por severidade.
+    6. Conclua indicando qual versão atende melhor à especificação e por quê,
+       ou declare empate se a diferença não for significativa.
 
-    ===== GERAÇÃO SDD =====
-    [[CODIGO_SDD]]
-    ===== GERAÇÃO LINGUAGEM NATURAL =====
-    [[CODIGO_NATURAL]]
+    ===== ESPECIFICAÇÃO DE REFERÊNCIA =====
+    [[REFERENCIA]]
+    ===== MÉTRICAS OBJETIVAS =====
+    [[METRICAS]]
+    ===== VERSÃO A =====
+    [[CODIGO_A]]
+    ===== VERSÃO B =====
+    [[CODIGO_B]]
     ===== FIM =====
   expected_output: >
-    Apenas um relatório Markdown conciso com resumo, critérios de comparação,
-    matriz lado a lado, evidências por versão, diferenças de escopo, lacunas
-    priorizadas, limitações e conclusão. Não inclua arquivos de código.
+    Apenas um relatório Markdown com: matriz requisito x versão (status e
+    evidência), cobertura por versão, tabela de notas por critério, defeitos
+    graves por versão e conclusão. Refira-se às versões apenas como A e B.
