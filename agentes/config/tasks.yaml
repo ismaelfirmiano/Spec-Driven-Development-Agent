@@ -1,0 +1,65 @@
+# Os marcadores [[NOME]] são substituídos pelo main antes da execução.
+# As regras técnicas são iguais para os dois desenvolvedores.
+
+desenvolver_sdd:
+  agent: agente_sdd
+  description: >
+    Implemente a aplicação descrita na especificação abaixo. Atenda a todos os
+    requisitos da especificação.
+
+    Regras técnicas:
+    - Use apenas HTML, CSS e JavaScript, sem bibliotecas externas.
+    - A aplicação deve funcionar abrindo o index.html direto no navegador,
+      sem servidor e sem etapa de build.
+    - Entregue o conteúdo completo de todos os arquivos.
+
+    ===== ESPECIFICAÇÃO =====
+    [[ENTRADA]]
+    ===== FIM =====
+  expected_output: >
+    Lista de arquivos da aplicação, cada um com caminho relativo e conteúdo
+    completo, incluindo o index.html.
+
+desenvolver_natural:
+  agent: agente_natural
+  description: >
+    Implemente a aplicação descrita no pedido abaixo. Atenda a tudo o que foi
+    pedido.
+
+    Regras técnicas:
+    - Use apenas HTML, CSS e JavaScript, sem bibliotecas externas.
+    - A aplicação deve funcionar abrindo o index.html direto no navegador,
+      sem servidor e sem etapa de build.
+    - Entregue o conteúdo completo de todos os arquivos.
+
+    ===== PEDIDO =====
+    [[ENTRADA]]
+    ===== FIM =====
+  expected_output: >
+    Lista de arquivos da aplicação, cada um com caminho relativo e conteúdo
+    completo, incluindo o index.html.
+
+comparar:
+  agent: comparador
+  description: >
+    Abaixo estão uma especificação e duas implementações da mesma aplicação,
+    chamadas de Versão A e Versão B.
+
+    Liste todos os requisitos verificáveis da especificação, usando os
+    identificadores dela quando existirem. Para cada requisito, informe se a
+    Versão A e a Versão B o atendem: "atendido", "parcial" ou "não atendido".
+    Só marque "atendido" quando o código mostrar a implementação. Em cada
+    versão, indique o arquivo e a linha que justificam a avaliação.
+
+    No fim, escreva uma conclusão curta dizendo qual versão atende melhor à
+    especificação e por quê.
+
+    ===== ESPECIFICAÇÃO =====
+    [[ESPECIFICACAO]]
+    ===== VERSÃO A =====
+    [[VERSAO_A]]
+    ===== VERSÃO B =====
+    [[VERSAO_B]]
+    ===== FIM =====
+  expected_output: >
+    Lista de requisitos com a avaliação de cada versão e uma conclusão curta.

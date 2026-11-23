@@ -2,9 +2,10 @@
 __pycache__/
 *.pyc
 .env
+.DS_Store
+resultados/
 output/
 natural_language/
 comparacoes/
-.DS_Store
-_to_delete/
 experimentos/
+_to_delete/

@@ -1,119 +1,79 @@
 # Spec-Driven-Development-Agent
 
-Experimento que compara **Spec-Driven Development (SDD)** com **desenvolvimento
-por linguagem natural** usando agentes de IA. Os agentes geram programas web
-(HTML/CSS/JS) que abrem direto no navegador. Usa **CrewAI** para orquestrar os
-agentes e **Gemini** (Google Gen AI) como modelo.
+Trabalho de Engenharia de Software: compara um agente que desenvolve a partir de
+uma especificação (SDD) com um agente que desenvolve a partir de um pedido em
+linguagem natural. Os dois geram uma aplicação web em HTML, CSS e JavaScript.
 
-## Desenho do experimento
+## Agentes
 
-A pergunta é: *usar SDD gera um código melhor do que pedir em linguagem natural?*
-Para a resposta ser válida, **só a forma da entrada muda** entre as duas versões:
+1. **Agente SDD**: recebe `entrada.md` (especificação) e gera a aplicação.
+2. **Agente natural**: recebe `entrada.txt` (pedido em linguagem natural) e gera a aplicação.
+3. **Comparador**: verifica quais requisitos da especificação cada versão atende.
 
-```
-SDD:      spec.md ──► Analista (plano) ──► Desenvolvedor ──┐
-                                                           ├─► Avaliador às cegas ──► RELATORIO_COMPARATIVO.md
-Natural:  pedido.md ─────────────────────► Desenvolvedor ──┘   (gabarito = spec SDD)
-```
+Cada agente roda uma única vez. Não há revisão nem correção do código gerado.
+Os dois desenvolvedores usam o mesmo modelo e as mesmas regras técnicas; só muda a
+entrada. O comparador recebe as versões como "A" e "B", em ordem sorteada, para
+não saber qual é qual.
 
-- **Mesmo desenvolvedor:** o mesmo agente, modelo, temperatura e as mesmas regras
-  técnicas (`sdd_agent/config/regras_tecnicas.md`) implementam as duas versões.
-- **Sem correção automática por padrão:** um agente que revisa e corrige o código
-  esconderia a diferença que queremos medir (ele "conserta" justamente o que a
-  falta de especificação deixou de fora). A revisão existe como opção
-  (`--revisar`), mas, se ligada, é aplicada **igualmente** às duas versões, para
-  testar uma segunda hipótese: *a revisão diminui a distância entre SDD e natural?*
-- **O avaliador só mede, não corrige.** Ele recebe apenas o código (sem plano,
-  relatório ou pedido), com as versões chamadas de "A" e "B" em ordem sorteada.
-  A revelação de quem é quem fica no fim do relatório.
-- **Gabarito comum:** as duas versões são avaliadas contra a especificação SDD
-  completa (o pedido natural descreve o mesmo produto, só que sem o detalhamento
-  de requisitos, regras e critérios de aceitação).
-- **Métricas objetivas sem LLM** (`sdd_agent/validacao.py`): abre cada versão num
-  navegador headless (Playwright), captura erros de JavaScript, verifica arquivos
-  referenciados e envio de formulários; conta arquivos e linhas de código.
+## Métricas
 
-### Agentes
-
-| Agente | Papel |
-|---|---|
-| Analista | Transforma a especificação em plano técnico (só no SDD). |
-| Desenvolvedor | Implementa a aplicação (o mesmo para SDD e natural). |
-| Revisor | Opcional (`--revisar`); revisa e corrige as duas versões da mesma forma. |
-| Avaliador | Compara às cegas (`--comparar`) e audita/corrige sob demanda (`--avaliar`). |
+- Tempo de geração de cada agente.
+- Tokens de entrada, de saída e totais.
+- Requisitos atendidos, parciais e não atendidos, e a cobertura em %
+  (atendido = 1, parcial = 0,5).
 
 ## Instalação
 
-> O CrewAI exige **Python ≥3.10 e <3.14**. O `setup.sh` funciona em **macOS e Linux**.
+Requer Python 3.10 a 3.13.
 
 ```bash
-./setup.sh                 # cria .venv, instala requirements.txt e o Chromium do Playwright
+./setup.sh
 source .venv/bin/activate
-# edite .env e coloque sua GEMINI_API_KEY (https://aistudio.google.com/apikey)
 ```
 
-## Rodando o experimento
+Coloque sua chave do Gemini no arquivo `.env` (https://aistudio.google.com/apikey).
 
-Pares prontos de especificação SDD + pedido em linguagem natural:
-
-| Aplicação | Especificação SDD | Pedido natural |
-|---|---|---|
-| TodoMVC (spec pública, `tastejs/todomvc`, MIT) | `specs/todomvc_sdd.md` (425 linhas) | `specs/natural_todomvc.md` |
-| TaskFlow (gerenciador de tarefas completo) | `specs/TaskFlow.md` (598 linhas) | `specs/natural_taskflow.md` |
+## Uso
 
 ```bash
-python main.py --experimento specs/todomvc_sdd.md specs/natural_todomvc.md
-python main.py --experimento specs/TaskFlow.md specs/natural_taskflow.md
-python main.py --experimento specs/TaskFlow.md specs/natural_taskflow.md --revisar -o experimentos/taskflow_revisado
+python main.py
 ```
 
-Saída em `experimentos/<spec>/`: `sdd/`, `natural/` e `RELATORIO_COMPARATIVO.md`
-(métricas objetivas, matriz requisito × versão, cobertura, notas por critério e
-revelação do cegamento).
-
-Como os LLMs não são determinísticos, rode cada par **várias vezes** (ex.: 3 a 5,
-com `-o experimentos/taskflow_1`, `_2`, ...) e compare as médias.
-
-### Passos separados
+Usa `entrada.md` e `entrada.txt`. Para outro par de arquivos com o mesmo nome:
 
 ```bash
-python main.py specs/TaskFlow.md --sem-abrir                 # só SDD     -> output/TaskFlow/
-python main.py specs/natural_taskflow.md --sem-abrir         # só natural -> natural_language/natural_taskflow/
-python main.py --comparar output/TaskFlow natural_language/natural_taskflow --referencia specs/TaskFlow.md
-python main.py --prompt "Crie uma lista de tarefas" --abrir  # pedido direto na linha de comando
+python main.py specs/taskflow
 ```
 
-Com um arquivo Markdown, `--modo auto` (padrão) escolhe SDD ou natural pelo
-conteúdo; também dá para forçar com `--modo sdd` ou `--modo natural`.
+O resultado fica em `resultados/<nome>_<data>/`:
 
-### Escrevendo um pedido natural justo
+- `sdd/`: aplicação gerada pelo agente SDD
+- `natural/`: aplicação gerada pelo agente natural
+- `relatorio.md`: métricas, tabela de requisitos e conclusão do comparador
 
-O pedido natural deve descrever **o mesmo produto e as mesmas funcionalidades
-principais** da spec, do jeito que uma pessoa pediria: sem IDs, sem critérios de
-aceitação, sem casos-limite e sem contrato de interface. Assim a diferença medida
-vem do detalhamento do SDD, e não de funcionalidades omitidas no pedido.
+Como o modelo não dá sempre a mesma resposta, rode algumas vezes e compare as médias.
 
-### Auditoria e correção (fora do experimento)
+## Entradas disponíveis
 
-`python main.py --avaliar [caminho]` audita **e corrige** uma geração. Usar isso em
-apenas uma das versões invalida a comparação.
+| Arquivos | Aplicação |
+|---|---|
+| `entrada.md` / `entrada.txt` | TodoMVC (cópia de `specs/todomvc`) |
+| `specs/todomvc.md` / `.txt` | TodoMVC, adaptado da especificação oficial (github.com/tastejs/todomvc, licença MIT) |
+| `specs/taskflow.md` / `.txt` | TaskFlow, gerenciador de tarefas com dashboard e Kanban |
+| `specs/uniflow.md` | UniFlow, gestão acadêmica (ainda sem o `.txt`) |
 
-## Modelos
-
-Usa `gemini-3.8-flash` como principal e modelos mais leves como reserva
-(`SDD_MODELOS_RESERVA`). Veja os disponíveis com `python main.py --modelos`.
-`SDD_MAX_TOKENS` (padrão 32768) precisa comportar o código completo de specs grandes.
+O `.txt` deve pedir a mesma aplicação e as mesmas funcionalidades principais do
+`.md`, mas como uma pessoa escreveria, sem lista de requisitos e sem critérios de
+aceitação.
 
 ## Estrutura
 
 ```
-main.py                          CLI
-sdd_agent/crew.py                agentes, etapas, experimento e comparação às cegas
-sdd_agent/validacao.py           testes automáticos no navegador (sem LLM)
-sdd_agent/config/agents.yaml     papéis dos agentes
-sdd_agent/config/tasks.yaml      descrição das etapas
-sdd_agent/config/regras_tecnicas.md  regras técnicas comuns às duas versões
-specs/                           especificações SDD e pedidos naturais
-tests/                           testes unitários (python -m unittest discover -s tests)
-experimentos/ output/ natural_language/ comparacoes/   saídas (ignoradas pelo git)
+main.py                    executa o experimento
+agentes/crew.py            agentes, medição e relatório
+agentes/config/agents.yaml descrição dos três agentes
+agentes/config/tasks.yaml  instruções de cada agente
+entrada.md / entrada.txt   entradas padrão
+specs/                     outros pares de entrada
+tests/                     testes (python -m unittest discover -s tests)
 ```
