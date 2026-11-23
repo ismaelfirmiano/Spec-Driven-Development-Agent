@@ -21,6 +21,14 @@ não saber qual é qual.
 - Tokens de entrada, de saída e totais.
 - Requisitos atendidos, parciais e não atendidos, e a cobertura em %
   (atendido = 1, parcial = 0,5).
+- Tentativas até uma resposta completa. Se a resposta vier cortada (sem
+  `index.html`, HTML incompleto ou arquivo citado que não foi entregue), a chamada
+  é repetida do zero, sem mostrar o erro ao modelo.
+
+O comparador avalia todos os requisitos com ID da especificação (linhas que
+começam com `RF-01`, `FR-001`, `RN-01` etc.; objetivos `OBJ` e critérios `SC`/`CA`
+ficam de fora por repetirem os requisitos). Comentários do código que citam esses
+IDs são escondidos do comparador, para ele não descobrir qual versão é a SDD.
 
 ## Instalação
 
@@ -55,12 +63,17 @@ Como o modelo não dá sempre a mesma resposta, rode algumas vezes e compare as 
 
 ## Entradas disponíveis
 
-| Arquivos | Aplicação |
-|---|---|
-| `entrada.md` / `entrada.txt` | TodoMVC (cópia de `specs/todomvc`) |
-| `specs/todomvc.md` / `.txt` | TodoMVC, adaptado da especificação oficial (github.com/tastejs/todomvc, licença MIT) |
-| `specs/taskflow.md` / `.txt` | TaskFlow, gerenciador de tarefas com dashboard e Kanban |
-| `specs/uniflow.md` | UniFlow, gestão acadêmica (ainda sem o `.txt`) |
+| Arquivos | Aplicação | Requisitos | Origem |
+|---|---|---|---|
+| `entrada.md` / `.txt` | TodoMVC (cópia de `specs/todomvc`) | 24 | tastejs/todomvc (MIT) |
+| `specs/todomvc` | Lista de tarefas TodoMVC | 24 | tastejs/todomvc (MIT) |
+| `specs/taskflow` | Gerenciador de tarefas com dashboard e Kanban | 18 RF + 10 RN + 10 RNF | equipe |
+| `specs/7guis` | Sete ferramentas, incluindo planilha com fórmulas e desenho com desfazer/refazer | 89 | 7GUIs, Eugen Kiss |
+| `specs/conduit` | Plataforma de artigos estilo Medium (usuários, artigos, comentários, favoritos, feed) | 87 | realworld-apps/realworld (MIT) |
+| `specs/uniflow` | Gestão acadêmica (notas, médias, frequência, relatórios) | 19 RF + 12 RN | equipe |
+
+Para usar um caso como entrada padrão, copie o par para `entrada.md` e `entrada.txt`,
+ou passe o caminho direto: `python main.py specs/conduit`.
 
 O `.txt` deve pedir a mesma aplicação e as mesmas funcionalidades principais do
 `.md`, mas como uma pessoa escreveria, sem lista de requisitos e sem critérios de

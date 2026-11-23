@@ -12,8 +12,11 @@ from agentes.crew import (
     Programa,
     Requisito,
     cobertura,
+    esconder_ids,
+    extrair_requisitos,
     rodar_experimento,
     salvar_programa,
+    verificar_programa,
 )
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -42,6 +45,16 @@ class ConfiguracaoTests(unittest.TestCase):
         self.assertTrue((RAIZ / "entrada.md").is_file())
         self.assertTrue((RAIZ / "entrada.txt").is_file())
 
+    def test_extrai_requisitos_sem_objetivos_e_criterios(self):
+        texto = "- **OBJ-01** objetivo\n- **FR-001** um\n### RF-002 — dois\nRN-01\nCA-001\n| FR-001 | tabela |"
+        self.assertEqual(extrair_requisitos(texto), ["FR-001", "RF-002", "RN-01"])
+        self.assertEqual(len(extrair_requisitos((RAIZ / "specs/conduit.md").read_text(encoding="utf-8"))), 87)
+
+    def test_todo_caso_tem_md_e_txt(self):
+        for md in (RAIZ / "specs").glob("*.md"):
+            with self.subTest(caso=md.stem):
+                self.assertTrue(md.with_suffix(".txt").is_file())
+
 
 class ExperimentoTests(unittest.TestCase):
     def test_cobertura(self):
@@ -51,6 +64,27 @@ class ExperimentoTests(unittest.TestCase):
         ]
         self.assertEqual(cobertura(reqs, "versao_a"), 50.0)
         self.assertEqual(cobertura(reqs, "versao_b"), 50.0)
+
+    def test_programa_cortado_e_recusado(self):
+        cortado = Programa(arquivos=[Arquivo(caminho="index.html", conteudo="<html><body><a class=")])
+        with self.assertRaises(ValueError):
+            verificar_programa(cortado)
+        sem_js = Programa(arquivos=[Arquivo(caminho="index.html",
+                                            conteudo='<html><script src="app.js"></script></html>')])
+        with self.assertRaises(ValueError):
+            verificar_programa(sem_js)
+        completo = Programa(arquivos=[
+            Arquivo(caminho="index.html", conteudo='<html><script src="./js/app.js"></script></html>'),
+            Arquivo(caminho="js/app.js", conteudo="1;"),
+        ])
+        verificar_programa(completo)
+
+    def test_comentarios_com_ids_sao_escondidos(self):
+        self.assertEqual(esconder_ids("// RF-28: paginação"), "")
+        self.assertEqual(esconder_ids("const n = 10; // RF-28"), "const n = 10;")
+        self.assertEqual(esconder_ids("<!-- FR-001 -->"), "")
+        self.assertEqual(esconder_ids("const id = 'AB-12';"), "const id = 'AB-12';")
+        self.assertEqual(esconder_ids("let x = 1; // comum"), "let x = 1; // comum")
 
     def test_caminho_fora_da_pasta_e_rejeitado(self):
         with tempfile.TemporaryDirectory() as pasta:

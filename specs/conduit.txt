@@ -1,0 +1,11 @@
+Crie o Conduit, um site de publicação de artigos no estilo do Medium (o app de exemplo do projeto RealWorld), usando só HTML, CSS e JavaScript puro. Ele precisa funcionar abrindo o index.html direto no navegador, sem servidor, então guarde todos os dados no localStorage. Os textos da tela podem ficar em inglês, como no Conduit original.
+
+As pessoas precisam conseguir se cadastrar, entrar, sair e editar o próprio perfil (foto, nome de usuário, bio, e-mail e senha). O login é só uma demonstração, não precisa ser seguro.
+
+Usuários logados podem escrever artigos com título, resumo, texto em Markdown e tags, e depois editar ou apagar os próprios artigos. Na página do artigo, o texto em Markdown deve aparecer formatado. Também dá para comentar nos artigos e apagar os próprios comentários.
+
+Na página inicial, mostre a lista de artigos com abas para o feed global e para o feed com os artigos de quem eu sigo, uma lista de tags populares para filtrar os artigos e paginação. Cada artigo deve mostrar o autor, a data, o título, o resumo, as tags e um botão de favoritar com a quantidade de favoritos.
+
+Quero poder favoritar artigos e seguir outros autores. A página de perfil de cada usuário mostra os dados dele e duas abas: os artigos que ele escreveu e os que ele favoritou.
+
+Coloque alguns usuários e artigos de exemplo para o site não começar vazio, e faça o layout funcionar bem no celular.

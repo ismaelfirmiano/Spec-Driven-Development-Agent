@@ -1,0 +1,11 @@
+Crie uma aplicação web com as sete tarefas do benchmark 7GUIs, usando só HTML, CSS e JavaScript puro, que funcione abrindo o index.html direto no navegador, sem servidor. A interface deve ficar em português, com um menu para alternar entre as sete ferramentas:
+
+1. Contador: um campo que mostra um número começando em 0 e um botão que soma 1 a cada clique.
+2. Conversor de temperatura: dois campos, Celsius e Fahrenheit. Ao digitar em um, o outro é convertido na hora. Se o valor digitado não for um número, o outro campo não muda.
+3. Reserva de voos: escolher entre voo só de ida ou de ida e volta, informar a data de ida e a de volta (dd.mm.aaaa) e clicar em reservar para ver uma mensagem de confirmação. A data de volta só vale para ida e volta. Data inválida deve ficar em vermelho e impedir a reserva, assim como uma volta antes da ida.
+4. Temporizador: uma barra mostrando o tempo decorrido, o tempo em segundos, um controle deslizante para escolher a duração e um botão para reiniciar. A contagem para quando chega na duração e volta a contar se eu aumentar a duração.
+5. CRUD: uma lista de pessoas (nome e sobrenome) com um filtro por sobrenome e botões para criar, atualizar e excluir a pessoa selecionada.
+6. Círculos: clicar numa área de desenho cria um círculo. Com o botão direito em um círculo, quero ajustar o diâmetro dele com um controle deslizante. Coloque botões de desfazer e refazer.
+7. Planilha: uma grade com colunas de A a Z e linhas de 0 a 99, onde posso digitar números, textos e fórmulas que começam com "=", como =add(A1,B1), =sum(A0:A9) e também sub, mul, div e prod. Quando eu mudar uma célula, as fórmulas que dependem dela devem ser recalculadas. Erros como divisão por zero e referência circular devem aparecer na célula sem travar a página.
+
+A aplicação deve funcionar bem no celular e ser acessível.

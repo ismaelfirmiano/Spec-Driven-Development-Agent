@@ -1,0 +1,11 @@
+Crie o UniFlow, um sistema web de gestão acadêmica, usando só HTML, CSS e JavaScript puro. Ele precisa funcionar abrindo o index.html direto no navegador, sem servidor, guardando os dados no localStorage. A interface deve ficar em português.
+
+O sistema tem três perfis: administrador, professor e estudante. Como não há servidor, coloque uma forma de trocar de perfil para demonstração. O administrador cuida dos cadastros, o professor lança avaliações, notas e frequência das suas disciplinas, e o estudante só consulta as próprias disciplinas, notas, frequência e situação.
+
+Quero cadastrar, editar e excluir estudantes (nome, matrícula, e-mail, curso, período e situação) e disciplinas (código, nome, curso, professor, carga horária, período letivo, média mínima e frequência mínima). Também quero matricular estudantes nas disciplinas, sem deixar matricular duas vezes na mesma disciplina.
+
+Cada disciplina tem avaliações com nome, data, peso e nota máxima. O professor lança as notas dos alunos matriculados, e o sistema calcula a média, que pode ser aritmética ou ponderada. Também quero registrar a frequência de cada aula (presente, falta ou falta justificada) e calcular a porcentagem de presença. Com isso, o sistema mostra a situação do aluno: aprovado, reprovado por nota, reprovado por frequência ou em andamento.
+
+Coloque um painel com os principais números da instituição e alertas para alunos com média ou frequência baixa. Quero pesquisar e filtrar estudantes e disciplinas, ver relatórios (notas por disciplina, médias, frequência, alunos em risco e matrículas), exportar os dados em CSV e JSON e importar um JSON, com confirmação antes de substituir os dados.
+
+Nas configurações, quero escolher o tema claro ou escuro, a escala de notas e o arredondamento. A aplicação deve funcionar bem no celular, ser acessível, pedir confirmação antes de excluir e mostrar mensagens de sucesso e de erro.

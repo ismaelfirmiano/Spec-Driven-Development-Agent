@@ -45,8 +45,8 @@ comparar:
     Abaixo estão uma especificação e duas implementações da mesma aplicação,
     chamadas de Versão A e Versão B.
 
-    Liste todos os requisitos verificáveis da especificação, usando os
-    identificadores dela quando existirem. Para cada requisito, informe se a
+    [[REQUISITOS]] Use os identificadores da especificação quando existirem.
+    Para cada requisito, informe se a
     Versão A e a Versão B o atendem: "atendido", "parcial" ou "não atendido".
     Só marque "atendido" quando o código mostrar a implementação. Em cada
     versão, indique o arquivo e a linha que justificam a avaliação.
